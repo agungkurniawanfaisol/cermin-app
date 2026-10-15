@@ -6,9 +6,11 @@
 
 **Architecture:** Modular monolith — Next.js App Router Server Actions + Route Handlers, Better Auth sessions in Postgres, Prisma → Supabase Postgres, private Supabase Storage with authz-gated signed URLs, domain folders under `src/server`, policies enforced on every mutation/query. Child has no login; adults open `/belajar`.
 
-**Tech Stack:** Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Better Auth, Prisma, Zod, Supabase (Postgres + Storage), Vitest, Playwright, pnpm, Vercel.
+**Tech Stack:** Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Better Auth, Prisma 7, Zod, Supabase (Postgres + Storage), Vitest, Playwright, pnpm, Docker Compose (dev hot reload), Vercel.
 
-**Spec references:** `docs/BRD.md`, `docs/PRD.md`, `docs/ERD.md`, `docs/ACCESS-CONTROL.md`, `docs/UI-DESIGN-SYSTEM.md`, `docs/ROADMAP.md`, `docs/TEST-PLAN.md`, `docs/superpowers/specs/2026-10-15-cermin-platform-design.md`
+**Working directory:** Repository **root** (`/home/agung/project/cermin-app`). Do not implement inside `.worktrees/`. Local run: `docker compose up --build` (see `docs/DOCKER.md`).
+
+**Spec references:** `docs/BRD.md`, `docs/PRD.md`, `docs/ERD.md`, `docs/ACCESS-CONTROL.md`, `docs/UI-DESIGN-SYSTEM.md`, `docs/ROADMAP.md`, `docs/TEST-PLAN.md`, `docs/DOCKER.md`, `docs/SUPABASE-SETUP.md`, `docs/superpowers/specs/2026-10-15-cermin-platform-design.md`
 
 ---
 

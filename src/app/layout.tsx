@@ -17,7 +17,11 @@ export const metadata: Metadata = {
   description: "Platform cerita sosial untuk pembelajaran dipandu",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="id"

@@ -7,6 +7,7 @@
 | Date       | 2026-10-15                                           |
 | Product    | CERMIN — social-story learning for autistic children |
 | Deployment | Vercel                                               |
+| Local run  | Docker Compose + hot reload (`docs/DOCKER.md`)       |
 
 ## 1. Ringkasan eksekutif
 

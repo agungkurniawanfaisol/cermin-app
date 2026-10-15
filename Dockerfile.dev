@@ -1,0 +1,19 @@
+# Development image — hot reload via bind mount (docker-compose.yml)
+# Source code comes from the host volume; deps live in a named volume.
+FROM node:22-bookworm-slim
+
+RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
+
+WORKDIR /app
+
+EXPOSE 3000
+
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+# WSL2 / Docker Desktop: reliable file watching across bind mounts
+ENV WATCHPACK_POLLING=true
+ENV CHOKIDAR_USEPOLLING=true
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Install from mounted package.json, then Next.js Turbopack on 0.0.0.0
+CMD ["sh", "-c", "pnpm install && pnpm exec next dev --turbopack --hostname 0.0.0.0 --port 3000"]

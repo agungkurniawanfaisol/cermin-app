@@ -5,12 +5,16 @@
 Requires a live Supabase Postgres with `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) in `.env.local`.
 
 ```bash
-# From repo root / worktree
-pnpm db:migrate --name init   # or: pnpm exec prisma migrate deploy
+# From repo root (atau via Docker — lihat docs/DOCKER.md)
+pnpm exec prisma migrate deploy
 pnpm db:seed
+
+# Docker:
+# docker compose exec web pnpm exec prisma migrate deploy
+# docker compose exec web pnpm db:seed
 ```
 
-Offline SQL for the initial schema lives in `migrations/*_init/migration.sql`. Until `.env.local` points at Supabase, migrate/seed cannot run against a real database.
+Offline SQL lives in `migrations/`. Until `.env.local` points at Supabase, migrate/seed cannot run against a real database.
 
 ## Prisma 7 notes
 
@@ -19,4 +23,4 @@ Offline SQL for the initial schema lives in `migrations/*_init/migration.sql`. U
 
 ## Private media bucket (`cermin-media`)
 
-`MediaAsset.storageBucket` defaults to `cermin-media`. That Supabase Storage bucket **must be private** (Public: OFF, no anon SELECT policies). App code uploads with the service role and serves files only via authz-gated signed URLs (`GET /api/media/[id]`, TTL 120s). Setup checklist: `docs/ROADMAP.md` §3.4–3.8.
+`MediaAsset.storageBucket` defaults to `cermin-media`. That Supabase Storage bucket **must be private** (Public: OFF, no anon SELECT policies). App code uploads with the service role and serves files only via authz-gated signed URLs (`GET /api/media/[id]`, TTL 120s). Checklist: `docs/SUPABASE-SETUP.md`.
