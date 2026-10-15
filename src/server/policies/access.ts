@@ -101,6 +101,14 @@ export async function assertCanAccessStudent(
   if (!canAccessStudent(user, ctx)) throw new AuthzError();
 }
 
+export async function assertCanLeadSession(
+  user: PolicyUser,
+  studentId: string,
+): Promise<void> {
+  const ctx = await loadStudentAccessCtx(user.id, user.role, studentId);
+  if (!canLeadSession(user, ctx)) throw new AuthzError();
+}
+
 /** Admin (non-archived) or Terapis on own DRAFT. */
 export function assertCanEditStoryContent(
   user: PolicyUser,

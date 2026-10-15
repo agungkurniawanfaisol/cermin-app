@@ -1,0 +1,145 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+type MediaRef = {
+  id: string;
+  altText: string | null;
+};
+
+async function fetchMediaUrl(mediaId: string): Promise<string> {
+  const res = await fetch(`/api/media/${mediaId}`);
+  const body = (await res.json()) as { url?: string; error?: string };
+  if (!res.ok || !body.url) {
+    throw new Error(body.error ?? "Gagal memuat media");
+  }
+  return body.url;
+}
+
+export function PageImage({ image }: { image: MediaRef }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const signed = await fetchMediaUrl(image.id);
+        if (!cancelled) setUrl(signed);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Gagal memuat gambar",
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [image.id]);
+
+  if (error) {
+    return (
+      <p className="text-center text-base text-[#5c6b73]" role="status">
+        {error}
+      </p>
+    );
+  }
+
+  if (!url) {
+    return (
+      <p className="text-center text-base text-[#5c6b73]" role="status">
+        Memuat gambar…
+      </p>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- signed URL from private bucket
+    <img
+      src={url}
+      alt={image.altText ?? "Gambar cerita"}
+      className="mx-auto max-h-[50vh] w-full max-w-2xl object-contain"
+    />
+  );
+}
+
+export function PageAudioButton({ audio }: { audio: MediaRef }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  async function onPlayClick() {
+    setError(null);
+    setLoading(true);
+    try {
+      let signed = url;
+      if (!signed) {
+        signed = await fetchMediaUrl(audio.id);
+        setUrl(signed);
+      }
+
+      if (!audioRef.current || audioRef.current.src !== signed) {
+        audioRef.current?.pause();
+        const el = new Audio(signed);
+        el.preload = "none";
+        el.addEventListener("ended", () => setPlaying(false));
+        el.addEventListener("pause", () => setPlaying(false));
+        audioRef.current = el;
+      }
+
+      await audioRef.current.play();
+      setPlaying(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal memutar suara");
+      setPlaying(false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function onPauseClick() {
+    audioRef.current?.pause();
+    setPlaying(false);
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      {playing ? (
+        <button
+          type="button"
+          onClick={onPauseClick}
+          className="min-h-14 min-w-[12rem] rounded-2xl border-2 border-[#3d7c6b] bg-white px-6 py-3 text-xl font-semibold text-[#1f2933] shadow-sm hover:bg-[#eef6f2] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b]"
+        >
+          Jeda suara
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void onPlayClick()}
+          disabled={loading}
+          className="min-h-14 min-w-[12rem] rounded-2xl border-2 border-[#3d7c6b] bg-[#3d7c6b] px-6 py-3 text-xl font-semibold text-white shadow-sm hover:bg-[#34695b] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b] disabled:opacity-60"
+        >
+          {loading ? "Memuat…" : "Putar suara"}
+        </button>
+      )}
+      {error ? (
+        <p className="text-base text-[#9b1c1c]" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}

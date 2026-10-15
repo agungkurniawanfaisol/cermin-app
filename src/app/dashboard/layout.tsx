@@ -49,6 +49,12 @@ export default async function DashboardLayout({
             >
               Cerita
             </Link>
+            <Link
+              href="/dashboard/sesi"
+              className="text-[var(--text,#1f2933)] hover:text-[var(--accent,#3d7c6b)]"
+            >
+              Sesi
+            </Link>
             {user.role === "ADMIN" ? (
               <Link
                 href="/dashboard/pengguna"
