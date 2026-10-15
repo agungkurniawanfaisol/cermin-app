@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { requireRole, requireSession } from "@/server/policies/access";
 import {
   faqIdSchema,
+  faqListWhere,
   faqUpsertSchema,
 } from "@/server/validations/help";
 
@@ -36,10 +37,6 @@ const listedFaqSelect = {
 
 function shortQuestion(q: string) {
   return q.length <= 120 ? q : `${q.slice(0, 117)}...`;
-}
-
-export function faqListWhere(role: "ADMIN" | "TERAPIS" | "ORANG_TUA") {
-  return role === "ADMIN" ? {} : { isPublished: true as const };
 }
 
 export async function listFaqsForViewer(): Promise<ListedFaq[]> {

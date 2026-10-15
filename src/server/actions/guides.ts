@@ -12,6 +12,7 @@ import { requireRole, requireSession } from "@/server/policies/access";
 import {
   assertValidGuideFile,
   guideIdSchema,
+  guideListWhere,
   guideMetaSchema,
   GUIDE_MIME,
 } from "@/server/validations/help";
@@ -46,10 +47,6 @@ function formString(value: FormDataEntryValue | null): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-export function guideListWhere(role: "ADMIN" | "TERAPIS" | "ORANG_TUA") {
-  return role === "ADMIN" ? {} : { isPublished: true as const };
 }
 
 export async function listGuidesForViewer(): Promise<ListedGuide[]> {

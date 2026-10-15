@@ -30,6 +30,8 @@ export function GuidePanel({ guides, isAdmin }: Props) {
   const uploadFormRef = useRef<HTMLFormElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadSortOrder, setUploadSortOrder] = useState("0");
+  const [uploadPublished, setUploadPublished] = useState(true);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadPending, startUploadTransition] = useTransition();
   const [adminPending, startAdminTransition] = useTransition();
@@ -55,6 +57,8 @@ export function GuidePanel({ guides, isAdmin }: Props) {
     setUploadError(null);
     const form = e.currentTarget;
     const fd = new FormData(form);
+    fd.set("sortOrder", uploadSortOrder);
+    fd.set("isPublished", uploadPublished ? "true" : "false");
     startUploadTransition(async () => {
       const result = await uploadGuide(fd);
       if (!result.ok) {
@@ -62,6 +66,8 @@ export function GuidePanel({ guides, isAdmin }: Props) {
         return;
       }
       setUploadTitle("");
+      setUploadSortOrder("0");
+      setUploadPublished(true);
       form.reset();
       setSelectedId(result.data.id);
       router.refresh();
@@ -117,6 +123,37 @@ export function GuidePanel({ guides, isAdmin }: Props) {
                 disabled={uploadPending}
                 className="min-h-11 file:mr-3 file:rounded-md file:border-0 file:bg-[var(--accent-soft,#e6f2ee)] file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--text,#1f2933)]"
               />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="guide-upload-sort">Urutan</Label>
+                <Input
+                  id="guide-upload-sort"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  required
+                  value={uploadSortOrder}
+                  onChange={(e) => setUploadSortOrder(e.target.value)}
+                  disabled={uploadPending}
+                />
+              </div>
+              <div className="flex min-h-11 items-end pb-1">
+                <label
+                  htmlFor="guide-upload-published"
+                  className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[var(--text,#1f2933)]"
+                >
+                  <input
+                    id="guide-upload-published"
+                    type="checkbox"
+                    checked={uploadPublished}
+                    onChange={(e) => setUploadPublished(e.target.checked)}
+                    disabled={uploadPending}
+                    className="size-4 rounded border-[var(--cermin-border,#d9e2ec)] text-[var(--cermin-accent,#3d7c6b)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus,#0b6e4f)]"
+                  />
+                  Publikasikan
+                </label>
+              </div>
             </div>
           </div>
           {uploadError ? (
@@ -230,13 +267,17 @@ function GuidePreview({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [titleDraft, setTitleDraft] = useState(guide.title);
+  const [sortOrderDraft, setSortOrderDraft] = useState(String(guide.sortOrder));
+  const [isPublishedDraft, setIsPublishedDraft] = useState(guide.isPublished);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [metaPending, startMetaTransition] = useTransition();
 
   useEffect(() => {
     setTitleDraft(guide.title);
+    setSortOrderDraft(String(guide.sortOrder));
+    setIsPublishedDraft(guide.isPublished);
     setMetaError(null);
-  }, [guide.id, guide.title]);
+  }, [guide.id, guide.title, guide.sortOrder, guide.isPublished]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -272,14 +313,16 @@ function GuidePreview({
     return () => ac.abort();
   }, [guide.id]);
 
-  function onSaveTitle(e: FormEvent<HTMLFormElement>) {
+  function onSaveMeta(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (titleDraft.trim() === guide.title) return;
+    if (!metaDirty) return;
     setMetaError(null);
     startMetaTransition(async () => {
       const result = await updateGuideMeta({
         id: guide.id,
         title: titleDraft,
+        sortOrder: Number(sortOrderDraft),
+        isPublished: isPublishedDraft,
       });
       if (!result.ok) {
         setMetaError(result.error);
@@ -289,7 +332,10 @@ function GuidePreview({
     });
   }
 
-  const titleDirty = titleDraft.trim() !== guide.title;
+  const metaDirty =
+    titleDraft.trim() !== guide.title ||
+    Number(sortOrderDraft) !== guide.sortOrder ||
+    isPublishedDraft !== guide.isPublished;
   const formDisabled = adminDisabled || metaPending;
 
   return (
@@ -339,11 +385,8 @@ function GuidePreview({
       </div>
 
       {isAdmin ? (
-        <form
-          onSubmit={onSaveTitle}
-          className="flex flex-col gap-2 sm:flex-row sm:items-end"
-        >
-          <div className="min-w-0 flex-1 space-y-2">
+        <form onSubmit={onSaveMeta} className="space-y-4">
+          <div className="space-y-2">
             <Label htmlFor={`guide-title-${guide.id}`}>Judul tampilan</Label>
             <Input
               id={`guide-title-${guide.id}`}
@@ -353,19 +396,47 @@ function GuidePreview({
               onChange={(e) => setTitleDraft(e.target.value)}
             />
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor={`guide-sort-${guide.id}`}>Urutan</Label>
+              <Input
+                id={`guide-sort-${guide.id}`}
+                type="number"
+                min={0}
+                max={10000}
+                required
+                value={sortOrderDraft}
+                disabled={formDisabled}
+                onChange={(e) => setSortOrderDraft(e.target.value)}
+              />
+            </div>
+            <div className="flex min-h-11 items-end pb-1">
+              <label
+                htmlFor={`guide-published-${guide.id}`}
+                className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[var(--text,#1f2933)]"
+              >
+                <input
+                  id={`guide-published-${guide.id}`}
+                  type="checkbox"
+                  checked={isPublishedDraft}
+                  onChange={(e) => setIsPublishedDraft(e.target.checked)}
+                  disabled={formDisabled}
+                  className="size-4 rounded border-[var(--cermin-border,#d9e2ec)] text-[var(--cermin-accent,#3d7c6b)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus,#0b6e4f)]"
+                />
+                Publikasikan
+              </label>
+            </div>
+          </div>
           <Button
             type="submit"
             variant="outline"
             className="min-h-11 w-full sm:w-auto"
-            disabled={formDisabled || !titleDirty}
+            disabled={formDisabled || !metaDirty}
           >
-            {metaPending ? "Menyimpan…" : "Simpan judul"}
+            {metaPending ? "Menyimpan…" : "Simpan perubahan"}
           </Button>
           {metaError ? (
-            <p
-              className="w-full text-sm text-[var(--danger,#9b2c2c)] sm:basis-full"
-              role="alert"
-            >
+            <p className="text-sm text-[var(--danger,#9b2c2c)]" role="alert">
               {metaError}
             </p>
           ) : null}

@@ -36,6 +36,14 @@ export const guideMetaSchema = z.object({
 export const GUIDE_MAX_BYTES = 10 * 1024 * 1024;
 export const GUIDE_MIME = "application/pdf";
 
+export function faqListWhere(role: "ADMIN" | "TERAPIS" | "ORANG_TUA") {
+  return role === "ADMIN" ? {} : { isPublished: true as const };
+}
+
+export function guideListWhere(role: "ADMIN" | "TERAPIS" | "ORANG_TUA") {
+  return role === "ADMIN" ? {} : { isPublished: true as const };
+}
+
 export function assertValidGuideFile(file: {
   type: string;
   size: number;
