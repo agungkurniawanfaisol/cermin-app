@@ -100,7 +100,9 @@ export async function listStudentsForViewer(): Promise<ListedStudent[]> {
   });
 }
 
-export type StudentDetail = Student & {
+export type StudentDetail = Omit<Student, "adminNotes"> & {
+  /** Only present when viewer role is ADMIN. */
+  adminNotes?: string | null;
   therapistAssignments: Array<{
     id: string;
     therapistId: string;
@@ -154,7 +156,12 @@ export async function getStudentDetail(
   });
 
   if (!student) throw new AuthzError("Murid tidak ditemukan", 404);
-  return student;
+
+  if (user.role === "ADMIN") return student;
+
+  const { adminNotes, ...safe } = student;
+  void adminNotes;
+  return safe;
 }
 
 export async function createStudent(

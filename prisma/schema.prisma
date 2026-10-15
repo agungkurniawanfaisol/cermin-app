@@ -156,6 +156,10 @@ model TherapistAssignment {
 
   @@index([therapistId])
   @@index([studentId])
+  // Partial unique: at most one active assignment per (therapistId, studentId).
+  // Prisma cannot express WHERE "endedAt" IS NULL; enforced in migration:
+  // CREATE UNIQUE INDEX therapist_assignments_active_unique
+  //   ON therapist_assignments ("therapistId", "studentId") WHERE "endedAt" IS NULL;
   @@map("therapist_assignments")
 }
 

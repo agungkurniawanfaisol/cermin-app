@@ -12,8 +12,10 @@ import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import {
   AuthzError,
+  assertCanAccessStudent,
   assertCanLeadSession,
   requireSession,
+  type PolicyUser,
 } from "@/server/policies/access";
 import {
   addObservationSchema,
@@ -33,13 +35,24 @@ function toErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+/** End session: Admin or session leader only. */
 function assertCanManageSession(
-  user: { id: string; role: string },
+  user: PolicyUser,
   session: { ledByUserId: string },
 ): void {
   if (user.role === "ADMIN") return;
   if (session.ledByUserId === user.id) return;
   throw new AuthzError();
+}
+
+/** Read/observe: Admin, leader, or user with access to the session student. */
+async function assertCanReadSession(
+  user: PolicyUser,
+  session: { ledByUserId: string; studentId: string },
+): Promise<void> {
+  if (user.role === "ADMIN") return;
+  if (session.ledByUserId === user.id) return;
+  await assertCanAccessStudent(user, session.studentId);
 }
 
 export type PublishedStoryOption = {
@@ -147,10 +160,10 @@ export async function addObservation(
 
     const session = await prisma.learningSession.findUnique({
       where: { id: parsed.data.sessionId },
-      select: { id: true, ledByUserId: true, endedAt: true },
+      select: { id: true, ledByUserId: true, studentId: true, endedAt: true },
     });
     if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
-    assertCanManageSession(user, session);
+    await assertCanReadSession(user, session);
     if (session.endedAt) {
       throw new AuthzError("Sesi sudah berakhir");
     }
@@ -293,7 +306,7 @@ export async function getSessionForReader(
   });
 
   if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
-  assertCanManageSession(user, session);
+  await assertCanReadSession(user, session);
 
   return {
     id: session.id,

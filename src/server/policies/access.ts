@@ -109,6 +109,29 @@ export async function assertCanLeadSession(
   if (!canLeadSession(user, ctx)) throw new AuthzError();
 }
 
+/** True if Admin, or Terapis/Ortu with at least one active student relation. */
+export async function userHasAnyStudentAccess(
+  user: PolicyUser,
+): Promise<boolean> {
+  if (user.status !== "ACTIVE") return false;
+  if (user.role === "ADMIN") return true;
+  if (user.role === "TERAPIS") {
+    const row = await prisma.therapistAssignment.findFirst({
+      where: { therapistId: user.id, endedAt: null },
+      select: { id: true },
+    });
+    return Boolean(row);
+  }
+  if (user.role === "ORANG_TUA") {
+    const row = await prisma.parentLink.findFirst({
+      where: { parentId: user.id, isActive: true },
+      select: { id: true },
+    });
+    return Boolean(row);
+  }
+  return false;
+}
+
 /** Admin (non-archived) or Terapis on own DRAFT. */
 export function assertCanEditStoryContent(
   user: PolicyUser,
@@ -145,7 +168,7 @@ export function canEditStoryContent(
 }
 
 /**
- * MVP media access: Admin; story editor; or authenticated Admin/Terapis/Ortu
+ * MVP media access: Admin; story editor; or user with any student access
  * when story is PUBLISHED (learning content).
  */
 export async function assertCanAccessMedia(
@@ -175,7 +198,7 @@ export async function assertCanAccessMedia(
 
   if (
     story.status === StoryStatus.PUBLISHED &&
-    (user.role === "TERAPIS" || user.role === "ORANG_TUA")
+    (await userHasAnyStudentAccess(user))
   ) {
     return;
   }
