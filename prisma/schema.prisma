@@ -176,6 +176,7 @@ model ParentLink {
 model InviteToken {
   id          String    @id @default(uuid()) @db.Uuid
   email       String
+  name        String
   role        UserRole
   tokenHash   String    @unique
   expiresAt   DateTime
