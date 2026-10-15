@@ -76,7 +76,10 @@ export default async function CeritaDetailPage({
       : [{ id: story.categoryId, name: story.category.name }];
 
   const pagesKey = story.pages
-    .map((p) => `${p.id}:${p.sortOrder}:${p.bodyText.length}`)
+    .map(
+      (p) =>
+        `${p.id}:${p.sortOrder}:${p.bodyText.length}:${p.media.map((m) => m.id).join(",")}`,
+    )
     .join("|");
 
   return (
@@ -126,6 +129,13 @@ export default async function CeritaDetailPage({
           id: p.id,
           sortOrder: p.sortOrder,
           bodyText: p.bodyText,
+          media: p.media.map((m) => ({
+            id: m.id,
+            kind: m.kind,
+            mimeType: m.mimeType,
+            altText: m.altText,
+            sortOrder: m.sortOrder,
+          })),
         }))}
         readOnly={!editable}
       />

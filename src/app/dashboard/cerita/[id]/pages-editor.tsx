@@ -11,11 +11,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PageMediaUploader,
+  type PageMediaItem,
+} from "./page-media-uploader";
 
 type PageItem = {
   id: string;
   sortOrder: number;
   bodyText: string;
+  media: PageMediaItem[];
 };
 
 export function PagesEditor({
@@ -193,6 +198,13 @@ export function PagesEditor({
                 Simpan halaman
               </Button>
             ) : null}
+
+            <PageMediaUploader
+              storyId={storyId}
+              pageId={page.id}
+              media={page.media}
+              readOnly={readOnly}
+            />
           </li>
         ))}
       </ul>

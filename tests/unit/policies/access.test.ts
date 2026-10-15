@@ -1,6 +1,8 @@
+import { StoryStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import {
   canAccessStudent,
+  canEditStoryContent,
   canPublishStory,
   canLeadSession,
   type PolicyUser,
@@ -51,5 +53,52 @@ describe("canLeadSession", () => {
       true,
     );
     expect(canLeadSession(ortu, { assigned: false, linked: true })).toBe(true);
+  });
+});
+
+describe("canEditStoryContent", () => {
+  it("allows admin on non-archived", () => {
+    expect(
+      canEditStoryContent(admin, {
+        status: StoryStatus.DRAFT,
+        createdById: "x",
+      }),
+    ).toBe(true);
+  });
+
+  it("denies admin on archived", () => {
+    expect(
+      canEditStoryContent(admin, {
+        status: StoryStatus.ARCHIVED,
+        createdById: "x",
+      }),
+    ).toBe(false);
+  });
+
+  it("allows terapis on own draft", () => {
+    expect(
+      canEditStoryContent(terapis, {
+        status: StoryStatus.DRAFT,
+        createdById: terapis.id,
+      }),
+    ).toBe(true);
+  });
+
+  it("denies terapis on others draft", () => {
+    expect(
+      canEditStoryContent(terapis, {
+        status: StoryStatus.DRAFT,
+        createdById: "other",
+      }),
+    ).toBe(false);
+  });
+
+  it("denies ortu", () => {
+    expect(
+      canEditStoryContent(ortu, {
+        status: StoryStatus.DRAFT,
+        createdById: ortu.id,
+      }),
+    ).toBe(false);
   });
 });

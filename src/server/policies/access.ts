@@ -1,3 +1,4 @@
+import { StoryStatus } from "@prisma/client";
 import { headers } from "next/headers";
 import { auth, type SessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -19,6 +20,11 @@ export type PolicyUser = {
 };
 
 export type StudentAccessCtx = { assigned: boolean; linked: boolean };
+
+export type StoryEditTarget = {
+  status: StoryStatus;
+  createdById: string;
+};
 
 export async function requireSession(): Promise<SessionUser> {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -93,4 +99,78 @@ export async function assertCanAccessStudent(
 ): Promise<void> {
   const ctx = await loadStudentAccessCtx(user.id, user.role, studentId);
   if (!canAccessStudent(user, ctx)) throw new AuthzError();
+}
+
+/** Admin (non-archived) or Terapis on own DRAFT. */
+export function assertCanEditStoryContent(
+  user: PolicyUser,
+  story: StoryEditTarget,
+): void {
+  if (user.role === "ADMIN") {
+    if (story.status === StoryStatus.ARCHIVED) {
+      throw new AuthzError("Cerita terarsip tidak dapat diedit");
+    }
+    return;
+  }
+  if (user.role === "TERAPIS") {
+    if (story.status !== StoryStatus.DRAFT) {
+      throw new AuthzError("Terapis hanya dapat mengedit draf");
+    }
+    if (story.createdById !== user.id) {
+      throw new AuthzError("Anda hanya dapat mengedit cerita sendiri");
+    }
+    return;
+  }
+  throw new AuthzError();
+}
+
+export function canEditStoryContent(
+  user: PolicyUser,
+  story: StoryEditTarget,
+): boolean {
+  try {
+    assertCanEditStoryContent(user, story);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * MVP media access: Admin; story editor; or authenticated Admin/Terapis/Ortu
+ * when story is PUBLISHED (learning content).
+ */
+export async function assertCanAccessMedia(
+  user: PolicyUser,
+  mediaId: string,
+): Promise<void> {
+  const media = await prisma.mediaAsset.findUnique({
+    where: { id: mediaId },
+    include: {
+      story: { select: { id: true, status: true, createdById: true } },
+      page: {
+        select: {
+          story: { select: { id: true, status: true, createdById: true } },
+        },
+      },
+    },
+  });
+
+  if (!media) throw new AuthzError("Media tidak ditemukan", 404);
+
+  const story = media.story ?? media.page?.story ?? null;
+  if (!story) throw new AuthzError("Media tidak terkait cerita", 404);
+
+  if (user.role === "ADMIN") return;
+
+  if (canEditStoryContent(user, story)) return;
+
+  if (
+    story.status === StoryStatus.PUBLISHED &&
+    (user.role === "TERAPIS" || user.role === "ORANG_TUA")
+  ) {
+    return;
+  }
+
+  throw new AuthzError();
 }

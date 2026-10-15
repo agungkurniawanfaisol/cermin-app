@@ -11,6 +11,7 @@ import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import {
   AuthzError,
+  assertCanEditStoryContent,
   canPublishStory,
   requireRole,
   requireSession,
@@ -72,28 +73,6 @@ export function canUserTransitionStoryStatus(
   return false;
 }
 
-function assertCanEditStoryContent(
-  user: PolicyUser,
-  story: { status: StoryStatus; createdById: string },
-): void {
-  if (user.role === "ADMIN") {
-    if (story.status === StoryStatus.ARCHIVED) {
-      throw new AuthzError("Cerita terarsip tidak dapat diedit");
-    }
-    return;
-  }
-  if (user.role === "TERAPIS") {
-    if (story.status !== StoryStatus.DRAFT) {
-      throw new AuthzError("Terapis hanya dapat mengedit draf");
-    }
-    if (story.createdById !== user.id) {
-      throw new AuthzError("Anda hanya dapat mengedit cerita sendiri");
-    }
-    return;
-  }
-  throw new AuthzError();
-}
-
 export type ListedCategory = {
   id: string;
   name: string;
@@ -139,10 +118,18 @@ export async function listStoriesByCategory(): Promise<ListedCategory[]> {
   return categories;
 }
 
+export type StoryPageMedia = {
+  id: string;
+  kind: string;
+  mimeType: string;
+  altText: string | null;
+  sortOrder: number;
+};
+
 export type StoryDetail = Story & {
   category: { id: string; name: string };
   createdBy: { id: string; name: string; email: string };
-  pages: StoryPage[];
+  pages: Array<StoryPage & { media: StoryPageMedia[] }>;
 };
 
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
@@ -160,7 +147,21 @@ export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
     include: {
       category: { select: { id: true, name: true } },
       createdBy: { select: { id: true, name: true, email: true } },
-      pages: { orderBy: { sortOrder: "asc" } },
+      pages: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          media: {
+            orderBy: { sortOrder: "asc" },
+            select: {
+              id: true,
+              kind: true,
+              mimeType: true,
+              altText: true,
+              sortOrder: true,
+            },
+          },
+        },
+      },
     },
   });
 

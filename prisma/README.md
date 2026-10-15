@@ -16,3 +16,7 @@ Offline SQL for the initial schema lives in `migrations/*_init/migration.sql`. U
 
 - Connection URL is in `prisma.config.ts` (not `schema.prisma`).
 - Runtime client uses `@prisma/adapter-pg` (`src/lib/db.ts`, `prisma/seed.ts`).
+
+## Private media bucket (`cermin-media`)
+
+`MediaAsset.storageBucket` defaults to `cermin-media`. That Supabase Storage bucket **must be private** (Public: OFF, no anon SELECT policies). App code uploads with the service role and serves files only via authz-gated signed URLs (`GET /api/media/[id]`, TTL 120s). Setup checklist: `docs/ROADMAP.md` §3.4–3.8.
