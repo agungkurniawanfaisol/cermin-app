@@ -1,0 +1,350 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  TERAPIS
+  ORANG_TUA
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum StudentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum StoryStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MediaKind {
+  IMAGE
+  AUDIO
+}
+
+enum TextSize {
+  SM
+  MD
+  LG
+  XL
+}
+
+model User {
+  id            String     @id @default(uuid()) @db.Uuid
+  name          String
+  email         String     @unique
+  emailVerified Boolean    @default(false)
+  image         String?
+  role          UserRole   @default(ORANG_TUA)
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  sessions             Session[]
+  accounts             Account[]
+  preference           UserPreference?
+  therapistAssignments TherapistAssignment[] @relation("TherapistAssignments")
+  assignmentsCreated   TherapistAssignment[] @relation("AssignmentCreator")
+  parentLinks          ParentLink[]
+  invitesCreated       InviteToken[]
+  auditLogs            AuditLog[]
+  storiesCreated       Story[]               @relation("StoryCreator")
+  mediaCreated         MediaAsset[]
+  sessionsLed          LearningSession[]
+  observations         SessionObservation[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(uuid()) @db.Uuid
+  accountId             String
+  providerId            String
+  userId                String    @db.Uuid
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verifications")
+}
+
+model UserPreference {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  textSize     TextSize @default(MD)
+  audioEnabled Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model Student {
+  id          String        @id @default(uuid()) @db.Uuid
+  displayName String
+  dateOfBirth DateTime?     @db.Date
+  adminNotes  String?
+  status      StudentStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  therapistAssignments TherapistAssignment[]
+  parentLinks          ParentLink[]
+  learningSessions     LearningSession[]
+
+  @@map("students")
+}
+
+model TherapistAssignment {
+  id           String    @id @default(uuid()) @db.Uuid
+  therapistId  String    @db.Uuid
+  studentId    String    @db.Uuid
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  assignedById String    @db.Uuid
+  therapist    User      @relation("TherapistAssignments", fields: [therapistId], references: [id])
+  student      Student   @relation(fields: [studentId], references: [id])
+  assignedBy   User      @relation("AssignmentCreator", fields: [assignedById], references: [id])
+
+  @@index([therapistId])
+  @@index([studentId])
+  @@map("therapist_assignments")
+}
+
+model ParentLink {
+  id            String  @id @default(uuid()) @db.Uuid
+  parentId      String  @db.Uuid
+  studentId     String  @db.Uuid
+  relationLabel String?
+  isActive      Boolean @default(true)
+  parent        User    @relation(fields: [parentId], references: [id])
+  student       Student @relation(fields: [studentId], references: [id])
+
+  @@unique([parentId, studentId])
+  @@index([studentId])
+  @@map("parent_links")
+}
+
+model InviteToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String
+  role        UserRole
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String    @db.Uuid
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@map("invite_tokens")
+}
+
+model StoryCategory {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+  stories     Story[]
+
+  @@map("story_categories")
+}
+
+model Story {
+  id                 String      @id @default(uuid()) @db.Uuid
+  categoryId         String      @db.Uuid
+  title              String
+  description        String      @default("")
+  learningObjectives String      @default("")
+  status             StoryStatus @default(DRAFT)
+  createdById        String      @db.Uuid
+  publishedAt        DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  category           StoryCategory @relation(fields: [categoryId], references: [id])
+  createdBy          User          @relation("StoryCreator", fields: [createdById], references: [id])
+  pages              StoryPage[]
+  versions           StoryVersion[]
+  evaluations        StoryEvaluation[]
+  media              MediaAsset[]
+  learningSessions   LearningSession[]
+
+  @@index([categoryId, status])
+  @@map("stories")
+}
+
+model StoryVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  storyId     String   @db.Uuid
+  versionNo   Int
+  snapshotJson Json
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, versionNo])
+  @@map("story_versions")
+}
+
+model StoryPage {
+  id        String   @id @default(uuid()) @db.Uuid
+  storyId   String   @db.Uuid
+  sortOrder Int
+  bodyText  String   @default("")
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  media     MediaAsset[]
+
+  @@unique([storyId, sortOrder])
+  @@map("story_pages")
+}
+
+model MediaAsset {
+  id            String     @id @default(uuid()) @db.Uuid
+  storyId       String?    @db.Uuid
+  pageId        String?    @db.Uuid
+  kind          MediaKind
+  storageBucket String     @default("cermin-media")
+  storageKey    String
+  mimeType      String
+  byteSize      Int
+  altText       String?
+  sortOrder     Int        @default(0)
+  createdById   String     @db.Uuid
+  createdAt     DateTime   @default(now())
+  story         Story?     @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  page          StoryPage? @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  createdBy     User       @relation(fields: [createdById], references: [id])
+
+  @@index([pageId])
+  @@index([storyId])
+  @@map("media_assets")
+}
+
+model StoryEvaluation {
+  id          String   @id @default(uuid()) @db.Uuid
+  storyId     String   @db.Uuid
+  title       String
+  description String   @default("")
+  sortOrder   Int      @default(0)
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  items       EvaluationItem[]
+
+  @@map("story_evaluations")
+}
+
+model EvaluationItem {
+  id           String          @id @default(uuid()) @db.Uuid
+  evaluationId String          @db.Uuid
+  prompt       String
+  itemType     String          @default("TEXT")
+  sortOrder    Int             @default(0)
+  evaluation   StoryEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  responses    SessionEvaluationResponse[]
+
+  @@map("evaluation_items")
+}
+
+model LearningSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  studentId    String    @db.Uuid
+  storyId      String    @db.Uuid
+  ledByUserId  String    @db.Uuid
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  student      Student   @relation(fields: [studentId], references: [id])
+  story        Story     @relation(fields: [storyId], references: [id])
+  ledBy        User      @relation(fields: [ledByUserId], references: [id])
+  observations SessionObservation[]
+  responses    SessionEvaluationResponse[]
+
+  @@index([studentId, startedAt(sort: Desc)])
+  @@index([storyId])
+  @@map("learning_sessions")
+}
+
+model SessionObservation {
+  id           String          @id @default(uuid()) @db.Uuid
+  sessionId    String          @db.Uuid
+  recordedById String          @db.Uuid
+  note         String
+  recordedAt   DateTime        @default(now())
+  session      LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  recordedBy   User            @relation(fields: [recordedById], references: [id])
+
+  @@map("session_observations")
+}
+
+model SessionEvaluationResponse {
+  id               String          @id @default(uuid()) @db.Uuid
+  sessionId        String          @db.Uuid
+  evaluationItemId String          @db.Uuid
+  value            Json
+  note             String?
+  session          LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  evaluationItem   EvaluationItem  @relation(fields: [evaluationItemId], references: [id])
+
+  @@unique([sessionId, evaluationItemId])
+  @@map("session_evaluation_responses")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
