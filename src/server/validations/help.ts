@@ -35,3 +35,17 @@ export const guideMetaSchema = z.object({
 
 export const GUIDE_MAX_BYTES = 10 * 1024 * 1024;
 export const GUIDE_MIME = "application/pdf";
+
+export function assertValidGuideFile(file: {
+  type: string;
+  size: number;
+  name: string;
+}): string | null {
+  const nameOk = file.name.toLowerCase().endsWith(".pdf");
+  if (file.type !== GUIDE_MIME && !nameOk) {
+    return "File harus PDF";
+  }
+  if (file.size <= 0) return "File kosong";
+  if (file.size > GUIDE_MAX_BYTES) return "Ukuran PDF maksimal 10 MB";
+  return null;
+}
