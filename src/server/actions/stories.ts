@@ -1,0 +1,646 @@
+"use server";
+
+import {
+  StoryStatus,
+  type Prisma,
+  type Story,
+  type StoryPage,
+} from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import { writeAudit } from "@/lib/audit";
+import { prisma } from "@/lib/db";
+import {
+  AuthzError,
+  canPublishStory,
+  requireRole,
+  requireSession,
+  type PolicyUser,
+} from "@/server/policies/access";
+import {
+  canTransitionStoryStatus,
+  createPageSchema,
+  createStorySchema,
+  pageIdSchema,
+  reorderPagesSchema,
+  storyIdSchema,
+  transitionStoryStatusSchema,
+  updatePageSchema,
+  updateStorySchema,
+  type CreatePageInput,
+  type CreateStoryInput,
+  type ReorderPagesInput,
+  type TransitionStoryStatusInput,
+  type UpdatePageInput,
+  type UpdateStoryInput,
+} from "@/server/validations/story";
+
+export type ActionOk<T> = { ok: true; data: T };
+export type ActionErr = { ok: false; error: string };
+export type ActionResult<T> = ActionOk<T> | ActionErr;
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AuthzError) return error.message;
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
+function revalidateStoryPaths(storyId?: string): void {
+  revalidatePath("/dashboard/cerita");
+  if (storyId) revalidatePath(`/dashboard/cerita/${storyId}`);
+}
+
+/** Structural transition + role matrix from ACCESS-CONTROL.md */
+export function canUserTransitionStoryStatus(
+  user: PolicyUser,
+  from: StoryStatus,
+  to: StoryStatus,
+): boolean {
+  if (user.status !== "ACTIVE") return false;
+  if (!canTransitionStoryStatus(from, to)) return false;
+
+  if (to === StoryStatus.PUBLISHED) {
+    return canPublishStory(user);
+  }
+
+  if (user.role === "ADMIN") return true;
+
+  if (user.role === "TERAPIS") {
+    // Terapis: submit review only (DRAFT → REVIEW)
+    return from === StoryStatus.DRAFT && to === StoryStatus.REVIEW;
+  }
+
+  return false;
+}
+
+function assertCanEditStoryContent(
+  user: PolicyUser,
+  story: { status: StoryStatus; createdById: string },
+): void {
+  if (user.role === "ADMIN") {
+    if (story.status === StoryStatus.ARCHIVED) {
+      throw new AuthzError("Cerita terarsip tidak dapat diedit");
+    }
+    return;
+  }
+  if (user.role === "TERAPIS") {
+    if (story.status !== StoryStatus.DRAFT) {
+      throw new AuthzError("Terapis hanya dapat mengedit draf");
+    }
+    if (story.createdById !== user.id) {
+      throw new AuthzError("Anda hanya dapat mengedit cerita sendiri");
+    }
+    return;
+  }
+  throw new AuthzError();
+}
+
+export type ListedCategory = {
+  id: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  stories: Array<{
+    id: string;
+    title: string;
+    status: StoryStatus;
+    publishedAt: Date | null;
+    updatedAt: Date;
+    createdBy: { id: string; name: string };
+  }>;
+};
+
+export async function listStoriesByCategory(): Promise<ListedCategory[]> {
+  const user = await requireSession();
+
+  const statusFilter =
+    user.role === "ORANG_TUA"
+      ? { status: StoryStatus.PUBLISHED }
+      : undefined;
+
+  const categories = await prisma.storyCategory.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+    include: {
+      stories: {
+        where: statusFilter,
+        orderBy: [{ updatedAt: "desc" }],
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          publishedAt: true,
+          updatedAt: true,
+          createdBy: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  return categories;
+}
+
+export type StoryDetail = Story & {
+  category: { id: string; name: string };
+  createdBy: { id: string; name: string; email: string };
+  pages: StoryPage[];
+};
+
+export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
+  const user = await requireSession();
+  const parsed = storyIdSchema.safeParse({ storyId });
+  if (!parsed.success) {
+    throw new AuthzError(
+      parsed.error.issues[0]?.message ?? "ID cerita tidak valid",
+      400,
+    );
+  }
+
+  const story = await prisma.story.findUnique({
+    where: { id: storyId },
+    include: {
+      category: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true, email: true } },
+      pages: { orderBy: { sortOrder: "asc" } },
+    },
+  });
+
+  if (!story) throw new AuthzError("Cerita tidak ditemukan", 404);
+
+  if (user.role === "ORANG_TUA" && story.status !== StoryStatus.PUBLISHED) {
+    throw new AuthzError();
+  }
+
+  return story;
+}
+
+export async function listActiveCategories(): Promise<
+  Array<{ id: string; name: string }>
+> {
+  await requireRole("ADMIN", "TERAPIS");
+  return prisma.storyCategory.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { sortOrder: "asc" },
+  });
+}
+
+export async function createStory(
+  input: CreateStoryInput,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireRole("ADMIN", "TERAPIS");
+    const parsed = createStorySchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const category = await prisma.storyCategory.findFirst({
+      where: { id: parsed.data.categoryId, isActive: true },
+    });
+    if (!category) {
+      return { ok: false, error: "Kategori tidak ditemukan" };
+    }
+
+    const story = await prisma.story.create({
+      data: {
+        categoryId: parsed.data.categoryId,
+        title: parsed.data.title,
+        description: parsed.data.description ?? "",
+        learningObjectives: parsed.data.learningObjectives ?? "",
+        status: StoryStatus.DRAFT,
+        createdById: user.id,
+      },
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "story.create",
+      entityType: "Story",
+      entityId: story.id,
+      metadata: { title: story.title, categoryId: story.categoryId },
+    });
+
+    revalidateStoryPaths(story.id);
+    return { ok: true, data: { id: story.id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toErrorMessage(error, "Gagal membuat cerita"),
+    };
+  }
+}
+
+export async function updateStory(
+  input: UpdateStoryInput,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireRole("ADMIN", "TERAPIS");
+    const parsed = updateStorySchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const existing = await prisma.story.findUnique({
+      where: { id: parsed.data.id },
+    });
+    if (!existing) {
+      return { ok: false, error: "Cerita tidak ditemukan" };
+    }
+    assertCanEditStoryContent(user, existing);
+
+    if (parsed.data.categoryId) {
+      const category = await prisma.storyCategory.findFirst({
+        where: { id: parsed.data.categoryId, isActive: true },
+      });
+      if (!category) {
+        return { ok: false, error: "Kategori tidak ditemukan" };
+      }
+    }
+
+    const { id, ...rest } = parsed.data;
+    await prisma.story.update({
+      where: { id },
+      data: {
+        ...(rest.categoryId !== undefined
+          ? { categoryId: rest.categoryId }
+          : {}),
+        ...(rest.title !== undefined ? { title: rest.title } : {}),
+        ...(rest.description !== undefined
+          ? { description: rest.description }
+          : {}),
+        ...(rest.learningObjectives !== undefined
+          ? { learningObjectives: rest.learningObjectives }
+          : {}),
+      },
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "story.update",
+      entityType: "Story",
+      entityId: id,
+      metadata: { title: rest.title ?? existing.title },
+    });
+
+    revalidateStoryPaths(id);
+    return { ok: true, data: { id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toErrorMessage(error, "Gagal memperbarui cerita"),
+    };
+  }
+}
+
+export async function createStoryPage(
+  input: CreatePageInput,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireRole("ADMIN", "TERAPIS");
+    const parsed = createPageSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const story = await prisma.story.findUnique({
+      where: { id: parsed.data.storyId },
+      include: { pages: { select: { sortOrder: true } } },
+    });
+    if (!story) {
+      return { ok: false, error: "Cerita tidak ditemukan" };
+    }
+    assertCanEditStoryContent(user, story);
+
+    const nextOrder =
+      story.pages.length === 0
+        ? 0
+        : Math.max(...story.pages.map((p) => p.sortOrder)) + 1;
+
+    const page = await prisma.storyPage.create({
+      data: {
+        storyId: story.id,
+        sortOrder: nextOrder,
+        bodyText: parsed.data.bodyText ?? "",
+      },
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "story.page.create",
+      entityType: "StoryPage",
+      entityId: page.id,
+      metadata: { storyId: story.id, sortOrder: nextOrder },
+    });
+
+    revalidateStoryPaths(story.id);
+    return { ok: true, data: { id: page.id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toErrorMessage(error, "Gagal menambah halaman"),
+    };
+  }
+}
+
+export async function updateStoryPage(
+  input: UpdatePageInput,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireRole("ADMIN", "TERAPIS");
+    const parsed = updatePageSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const page = await prisma.storyPage.findUnique({
+      where: { id: parsed.data.pageId },
+      include: { story: true },
+    });
+    if (!page) {
+      return { ok: false, error: "Halaman tidak ditemukan" };
+    }
+    assertCanEditStoryContent(user, page.story);
+
+    await prisma.storyPage.update({
+      where: { id: page.id },
+      data: { bodyText: parsed.data.bodyText },
+    });
+
+    revalidateStoryPaths(page.storyId);
+    return { ok: true, data: { id: page.id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toErrorMessage(error, "Gagal memperbarui halaman"),
+    };
+  }
+}
+
+export async function deleteStoryPage(
+  pageId: string,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireRole("ADMIN", "TERAPIS");
+    const parsed = pageIdSchema.safeParse({ pageId });
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const page = await prisma.storyPage.findUnique({
+      where: { id: pageId },
+      include: { story: true },
+    });
+    if (!page) {
+      return { ok: false, error: "Halaman tidak ditemukan" };
+    }
+    assertCanEditStoryContent(user, page.story);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.storyPage.delete({ where: { id: page.id } });
+      const remaining = await tx.storyPage.findMany({
+        where: { storyId: page.storyId },
+        orderBy: { sortOrder: "asc" },
+      });
+      // Normalize sortOrder to 0..n-1 without unique conflicts
+      for (let i = 0; i < remaining.length; i++) {
+        await tx.storyPage.update({
+          where: { id: remaining[i]!.id },
+          data: { sortOrder: i + 1000 },
+        });
+      }
+      for (let i = 0; i < remaining.length; i++) {
+        await tx.storyPage.update({
+          where: { id: remaining[i]!.id },
+          data: { sortOrder: i },
+        });
+      }
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "story.page.delete",
+      entityType: "StoryPage",
+      entityId: pageId,
+      metadata: { storyId: page.storyId },
+    });
+
+    revalidateStoryPaths(page.storyId);
+    return { ok: true, data: { id: pageId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toErrorMessage(error, "Gagal menghapus halaman"),
+    };
+  }
+}
+
+export async function reorderStoryPages(
+  input: ReorderPagesInput,
+): Promise<ActionResult<{ storyId: string }>> {
+  try {
+    const user = await requireRole("ADMIN", "TERAPIS");
+    const parsed = reorderPagesSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const story = await prisma.story.findUnique({
+      where: { id: parsed.data.storyId },
+      include: { pages: { select: { id: true } } },
+    });
+    if (!story) {
+      return { ok: false, error: "Cerita tidak ditemukan" };
+    }
+    assertCanEditStoryContent(user, story);
+
+    const existingIds = new Set(story.pages.map((p) => p.id));
+    if (
+      parsed.data.pageIds.length !== existingIds.size ||
+      parsed.data.pageIds.some((id) => !existingIds.has(id))
+    ) {
+      return {
+        ok: false,
+        error: "Daftar halaman tidak sesuai dengan cerita",
+      };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Two-pass to avoid unique (storyId, sortOrder) conflicts
+      for (let i = 0; i < parsed.data.pageIds.length; i++) {
+        await tx.storyPage.update({
+          where: { id: parsed.data.pageIds[i]! },
+          data: { sortOrder: i + 1000 },
+        });
+      }
+      for (let i = 0; i < parsed.data.pageIds.length; i++) {
+        await tx.storyPage.update({
+          where: { id: parsed.data.pageIds[i]! },
+          data: { sortOrder: i },
+        });
+      }
+    });
+
+    revalidateStoryPaths(story.id);
+    return { ok: true, data: { storyId: story.id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toErrorMessage(error, "Gagal mengurutkan halaman"),
+    };
+  }
+}
+
+type SnapshotPage = {
+  id: string;
+  sortOrder: number;
+  bodyText: string;
+  media: Array<{
+    id: string;
+    kind: string;
+    mimeType: string;
+    altText: string | null;
+    sortOrder: number;
+    storageKey: string;
+  }>;
+};
+
+function buildPublishSnapshot(story: {
+  title: string;
+  description: string;
+  learningObjectives: string;
+  pages: SnapshotPage[];
+}): Prisma.InputJsonValue {
+  return {
+    title: story.title,
+    description: story.description,
+    learningObjectives: story.learningObjectives,
+    pages: story.pages.map((p) => ({
+      id: p.id,
+      sortOrder: p.sortOrder,
+      bodyText: p.bodyText,
+      media: p.media.map((m) => ({
+        id: m.id,
+        kind: m.kind,
+        mimeType: m.mimeType,
+        altText: m.altText,
+        sortOrder: m.sortOrder,
+        storageKey: m.storageKey,
+      })),
+    })),
+  };
+}
+
+export async function transitionStoryStatus(
+  input: TransitionStoryStatusInput,
+): Promise<ActionResult<{ id: string; status: StoryStatus }>> {
+  try {
+    const user = await requireSession();
+    const parsed = transitionStoryStatusSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const story = await prisma.story.findUnique({
+      where: { id: parsed.data.storyId },
+      include: {
+        pages: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            media: { orderBy: { sortOrder: "asc" } },
+          },
+        },
+        versions: {
+          select: { versionNo: true },
+          orderBy: { versionNo: "desc" },
+          take: 1,
+        },
+      },
+    });
+    if (!story) {
+      return { ok: false, error: "Cerita tidak ditemukan" };
+    }
+
+    const toStatus = parsed.data.toStatus as StoryStatus;
+    if (!canUserTransitionStoryStatus(user, story.status, toStatus)) {
+      return {
+        ok: false,
+        error: "Transisi status tidak diizinkan",
+      };
+    }
+
+    if (toStatus === StoryStatus.PUBLISHED && story.pages.length === 0) {
+      return {
+        ok: false,
+        error: "Cerita harus punya minimal satu halaman sebelum dipublikasikan",
+      };
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const data: Prisma.StoryUpdateInput = {
+        status: toStatus,
+      };
+
+      if (toStatus === StoryStatus.PUBLISHED) {
+        data.publishedAt = new Date();
+        const nextVersion = (story.versions[0]?.versionNo ?? 0) + 1;
+        await tx.storyVersion.create({
+          data: {
+            storyId: story.id,
+            versionNo: nextVersion,
+            snapshotJson: buildPublishSnapshot(story),
+            createdById: user.id,
+          },
+        });
+      }
+
+      return tx.story.update({
+        where: { id: story.id },
+        data,
+      });
+    });
+
+    const auditAction =
+      toStatus === StoryStatus.PUBLISHED
+        ? "story.publish"
+        : toStatus === StoryStatus.ARCHIVED
+          ? "story.archive"
+          : "story.status_transition";
+
+    await writeAudit({
+      actorId: user.id,
+      action: auditAction,
+      entityType: "Story",
+      entityId: story.id,
+      metadata: { from: story.status, to: toStatus },
+    });
+
+    revalidateStoryPaths(story.id);
+    return { ok: true, data: { id: updated.id, status: updated.status } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toErrorMessage(error, "Gagal mengubah status cerita"),
+    };
+  }
+}
