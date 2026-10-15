@@ -715,6 +715,36 @@ async function main() {
     sessionCount++;
   }
 
+  // FAQ contoh untuk halaman Bantuan (idempotent)
+  const faqSeeds = [
+    {
+      question: "Bagaimana cara mulai sesi belajar?",
+      answer:
+        "Buka menu Sesi, pilih murid dan cerita yang sudah terbit, lalu mulai. Mode anak terbuka di /belajar.",
+      sortOrder: 0,
+    },
+    {
+      question: "Siapa yang bisa mengarsipkan murid?",
+      answer: "Hanya Admin, dengan alasan arsip.",
+      sortOrder: 1,
+    },
+  ];
+
+  for (const f of faqSeeds) {
+    const existing = await prisma.faqItem.findFirst({
+      where: { question: f.question },
+    });
+    if (!existing) {
+      await prisma.faqItem.create({
+        data: {
+          ...f,
+          isPublished: true,
+          createdById: admin.id,
+        },
+      });
+    }
+  }
+
   const counts = await Promise.all([
     prisma.user.count(),
     prisma.student.count(),
