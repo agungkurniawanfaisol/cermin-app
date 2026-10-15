@@ -62,6 +62,7 @@ model User {
   invitesCreated       InviteToken[]
   auditLogs            AuditLog[]
   storiesCreated       Story[]               @relation("StoryCreator")
+  storyVersionsCreated StoryVersion[]        @relation("StoryVersionCreator")
   mediaCreated         MediaAsset[]
   sessionsLed          LearningSession[]
   observations         SessionObservation[]
@@ -99,6 +100,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  @@unique([providerId, accountId])
   @@map("accounts")
 }
 
@@ -221,13 +223,14 @@ model Story {
 }
 
 model StoryVersion {
-  id          String   @id @default(uuid()) @db.Uuid
-  storyId     String   @db.Uuid
-  versionNo   Int
+  id           String   @id @default(uuid()) @db.Uuid
+  storyId      String   @db.Uuid
+  versionNo    Int
   snapshotJson Json
-  createdById String   @db.Uuid
-  createdAt   DateTime @default(now())
-  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  createdById  String   @db.Uuid
+  createdAt    DateTime @default(now())
+  story        Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  createdBy    User     @relation("StoryVersionCreator", fields: [createdById], references: [id])
 
   @@unique([storyId, versionNo])
   @@map("story_versions")
