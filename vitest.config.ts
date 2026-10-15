@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    passWithNoTests: true,
     env: {
       // Pure policy unit tests import access.ts which loads prisma at module init.
       DATABASE_URL:
