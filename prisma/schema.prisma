@@ -66,6 +66,8 @@ model User {
   mediaCreated         MediaAsset[]
   sessionsLed          LearningSession[]
   observations         SessionObservation[]
+  faqsCreated          FaqItem[]        @relation("FaqCreator")
+  guidesUploaded       GuideDocument[] @relation("GuideUploader")
 
   // List pengguna: filter peran/status + sort
   @@index([role, status])
@@ -314,6 +316,40 @@ model MediaAsset {
   @@index([pageId])
   @@index([storyId])
   @@map("media_assets")
+}
+
+model FaqItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  question    String
+  answer      String
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   User     @relation("FaqCreator", fields: [createdById], references: [id])
+
+  @@index([isPublished, sortOrder])
+  @@map("faq_items")
+}
+
+model GuideDocument {
+  id               String   @id @default(uuid()) @db.Uuid
+  title            String
+  sortOrder        Int      @default(0)
+  isPublished      Boolean  @default(true)
+  storageBucket    String   @default("cermin-media")
+  storageKey       String
+  mimeType         String
+  byteSize         Int
+  originalFileName String
+  uploadedById     String   @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  uploadedBy       User     @relation("GuideUploader", fields: [uploadedById], references: [id])
+
+  @@index([isPublished, sortOrder])
+  @@map("guide_documents")
 }
 
 model StoryEvaluation {
