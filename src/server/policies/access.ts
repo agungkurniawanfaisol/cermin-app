@@ -172,6 +172,27 @@ export async function assertCanLeadSession(
   if (!canLeadSession(user, ctx)) throw new AuthzError();
 }
 
+export function canAccessGuideDocument(
+  user: PolicyUser,
+  guide: { isPublished: boolean },
+): boolean {
+  if (user.status !== "ACTIVE") return false;
+  if (user.role === "ADMIN") return true;
+  return guide.isPublished;
+}
+
+export async function assertCanAccessGuide(
+  user: PolicyUser,
+  guideId: string,
+): Promise<void> {
+  const guide = await prisma.guideDocument.findUnique({
+    where: { id: guideId },
+    select: { isPublished: true },
+  });
+  if (!guide) throw new AuthzError("Tidak ditemukan", 404);
+  if (!canAccessGuideDocument(user, guide)) throw new AuthzError();
+}
+
 /** True if Admin, or Terapis/Ortu with at least one active student relation. */
 export async function userHasAnyStudentAccess(
   user: PolicyUser,
