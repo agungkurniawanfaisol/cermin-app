@@ -34,4 +34,10 @@ export const OPTIONAL_AUDIT_ACTIONS = [
   "student.avatar.upload.murid",
   "student.avatar.upload.ayah",
   "student.avatar.upload.ibu",
+  "faq.create",
+  "faq.update",
+  "faq.delete",
+  "guide.upload",
+  "guide.update",
+  "guide.delete",
 ] as const;
