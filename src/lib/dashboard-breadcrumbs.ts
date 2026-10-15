@@ -6,6 +6,7 @@ const SEGMENT_LABEL: Record<string, string> = {
   cerita: "Cerita",
   sesi: "Sesi",
   pengguna: "Pengguna",
+  bantuan: "Bantuan",
   pengaturan: "Pengaturan",
   baru: "Baru",
   undang: "Undang",

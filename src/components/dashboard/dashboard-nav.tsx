@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
+  CircleHelp,
   ClipboardList,
   LayoutDashboard,
+  Settings,
   UserCog,
   Users,
 } from "lucide-react";
@@ -24,6 +27,8 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard/cerita": BookOpen,
   "/dashboard/sesi": ClipboardList,
   "/dashboard/pengguna": UserCog,
+  "/dashboard/bantuan": CircleHelp,
+  "/dashboard/pengaturan": Settings,
 };
 
 type DashboardNavProps = {
@@ -33,6 +38,19 @@ type DashboardNavProps = {
   collapsed?: boolean;
   onNavigate?: () => void;
 };
+
+function NavPendingHint() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "ml-auto size-1.5 shrink-0 rounded-full bg-[var(--cermin-accent,#3d7c6b)] transition-opacity duration-150",
+        pending ? "opacity-100" : "opacity-0",
+      )}
+    />
+  );
+}
 
 export function DashboardNav({
   items,
@@ -63,6 +81,7 @@ export function DashboardNav({
           <Link
             key={item.href}
             href={item.href}
+            prefetch
             onClick={onNavigate}
             title={iconOnly ? item.label : undefined}
             className={cn(
@@ -85,6 +104,7 @@ export function DashboardNav({
             ) : (
               item.label
             )}
+            {vertical && !iconOnly ? <NavPendingHint /> : null}
             {!vertical ? (
               <span
                 className={cn(

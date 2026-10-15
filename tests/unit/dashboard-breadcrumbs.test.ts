@@ -24,4 +24,9 @@ describe("buildDashboardBreadcrumbs", () => {
       current: true,
     });
   });
+
+  it("labels bantuan", () => {
+    const crumbs = buildDashboardBreadcrumbs("/dashboard/bantuan");
+    expect(crumbs.at(-1)?.label).toBe("Bantuan");
+  });
 });
