@@ -31,7 +31,7 @@
 - [x] shadcn/ui
 - [x] Prisma schema + migrations + seed
 - [x] Better Auth + dashboard shell
-- [ ] Env Supabase terisi + migrate/seed di lingkungan nyata ([SUPABASE-SETUP.md](./SUPABASE-SETUP.md))
+- [x] Env Supabase terisi + migrate/seed di lingkungan nyata ([SUPABASE-SETUP.md](./SUPABASE-SETUP.md))
 - [ ] Vercel project + preview deploy
 
 ### Phase 1 — MVP inti belajar
@@ -46,6 +46,7 @@
 
 ### Phase 2 — Enrichment
 
+- [x] PWA installable (Android + iOS) + versioning semver (`package.json` / CHANGELOG)
 - Evaluation + EvaluationItem UI + SessionEvaluationResponse
 - StoryVersion UI / restore
 - Preferensi teks/audio lebih kaya
@@ -85,11 +86,11 @@ Detail: [DOCKER.md](./DOCKER.md), [SUPABASE-SETUP.md](./SUPABASE-SETUP.md).
 
 ## 4. Definition of Done — MVP runtime
 
-- [ ] Supabase terhubung; migrate + seed sukses
-- [ ] Login admin seed; invite terapis/ortu
-- [ ] Murid + assignment + cerita + media + sesi child mode end-to-end
-- [ ] Acceptance di [PRD.md](./PRD.md) §8 dan [TEST-PLAN.md](./TEST-PLAN.md)
+- [x] Supabase terhubung; migrate + seed sukses
+- [x] Login admin seed; invite terapis/ortu (alur kode + data seed siap)
+- [x] Murid + assignment + cerita + media + sesi child mode end-to-end (seed demo + route `/belajar`)
+- [ ] Acceptance penuh di [PRD.md](./PRD.md) §8 dan [TEST-PLAN.md](./TEST-PLAN.md) (uji E2E/integrasi berkelanjutan)
 
 ## 5. Gate berikutnya
 
-Implementasi kode MVP sudah di root. **Blocker operasional:** isi `.env.local` + Supabase, lalu verifikasi lewat Docker.
+Lingkungan lokal + Supabase sudah terhubung (migrate/seed/bucket `cermin-media`). Lanjut: preferensi teks/audio, rate-limit undangan/login, lalu Phase 2. Deploy Vercel tetap opsional sampai siap.

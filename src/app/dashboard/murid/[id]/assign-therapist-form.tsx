@@ -46,12 +46,12 @@ export function AssignTherapistForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
-      <div className="min-w-[12rem] flex-1 space-y-2">
+    <form onSubmit={onSubmit} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="min-w-0 flex-1 space-y-2 sm:min-w-[12rem]">
         <Label htmlFor="assign-therapist">Terapis</Label>
         <select
           id="assign-therapist"
-          className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+          className="flex h-11 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
           value={therapistId}
           onChange={(e) => setTherapistId(e.target.value)}
           disabled={pending}
@@ -63,7 +63,7 @@ export function AssignTherapistForm({
           ))}
         </select>
       </div>
-      <Button type="submit" className="h-9" disabled={pending}>
+      <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
         {pending ? "Menugaskan…" : "Tugaskan"}
       </Button>
       {error ? (

@@ -5,11 +5,20 @@ import {
   StoryStatus,
   StudentStatus,
   type LearningSession,
+  type Prisma,
   type SessionObservation,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import {
+  paginationMeta,
+  parseListQuery,
+  toListResult,
+  type ListQueryInput,
+  type ListResult,
+} from "@/lib/list-query";
 import {
   AuthzError,
   assertCanAccessStudent,
@@ -28,12 +37,6 @@ import {
 export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
 export type ActionResult<T> = ActionOk<T> | ActionErr;
-
-function toErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof AuthzError) return error.message;
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
 
 /** End session: Admin or session leader only. */
 function assertCanManageSession(
@@ -69,6 +72,7 @@ export async function listPublishedStoriesForSession(): Promise<
   const stories = await prisma.story.findMany({
     where: { status: StoryStatus.PUBLISHED },
     orderBy: [{ title: "asc" }],
+    take: 100,
     select: {
       id: true,
       title: true,
@@ -81,6 +85,108 @@ export async function listPublishedStoriesForSession(): Promise<
     title: story.title,
     categoryName: story.category.name,
   }));
+}
+
+export type ListedSession = {
+  id: string;
+  startedAt: Date;
+  endedAt: Date | null;
+  student: { id: string; displayName: string };
+  story: { id: string; title: string };
+  ledBy: { id: string; name: string };
+};
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function listLearningSessionsForViewer(
+  raw: ListQueryInput = {},
+): Promise<ListResult<ListedSession>> {
+  const user = await requireSession();
+  const parsed = parseListQuery(raw, {
+    allowedSort: ["startedAt"],
+    defaultSort: "startedAt",
+    defaultOrder: "desc",
+    filters: {
+      state: ["OPEN", "ENDED", "ALL"],
+    },
+  });
+
+  const studentIdRaw =
+    typeof raw.studentId === "string" ? raw.studentId.trim() : "";
+  const studentId = UUID_RE.test(studentIdRaw) ? studentIdRaw : undefined;
+
+  const and: Prisma.LearningSessionWhereInput[] = [];
+
+  if (user.role === "TERAPIS") {
+    and.push({
+      student: {
+        therapistAssignments: {
+          some: { therapistId: user.id, endedAt: null },
+        },
+      },
+    });
+  } else if (user.role === "ORANG_TUA") {
+    and.push({
+      student: {
+        parentLinks: {
+          some: { parentId: user.id, isActive: true },
+        },
+      },
+    });
+  }
+
+  if (parsed.filters.state === "OPEN") {
+    and.push({ endedAt: null });
+  } else if (parsed.filters.state === "ENDED") {
+    and.push({ endedAt: { not: null } });
+  }
+
+  if (studentId) {
+    // Scoped by role relation filters above — unknown/unlinked id → empty list.
+    and.push({ studentId });
+  }
+
+  if (parsed.q) {
+    and.push({
+      OR: [
+        {
+          student: {
+            displayName: { contains: parsed.q, mode: "insensitive" },
+          },
+        },
+        { story: { title: { contains: parsed.q, mode: "insensitive" } } },
+        { ledBy: { name: { contains: parsed.q, mode: "insensitive" } } },
+      ],
+    });
+  }
+
+  const where: Prisma.LearningSessionWhereInput =
+    and.length === 0 ? {} : { AND: and };
+
+  const total = await prisma.learningSession.count({ where });
+  const meta = paginationMeta({
+    page: parsed.page,
+    pageSize: parsed.pageSize,
+    total,
+  });
+
+  const items = await prisma.learningSession.findMany({
+    where,
+    select: {
+      id: true,
+      startedAt: true,
+      endedAt: true,
+      student: { select: { id: true, displayName: true } },
+      story: { select: { id: true, title: true } },
+      ledBy: { select: { id: true, name: true } },
+    },
+    orderBy: { startedAt: parsed.order },
+    skip: meta.skip,
+    take: meta.take,
+  });
+
+  return toListResult(items, meta);
 }
 
 export async function startLearningSession(
@@ -99,11 +205,23 @@ export async function startLearningSession(
 
     const student = await prisma.student.findUnique({
       where: { id: parsed.data.studentId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        imageKey: true,
+        requirePhotoForSession: true,
+      },
     });
     if (!student) throw new AuthzError("Murid tidak ditemukan", 404);
     if (student.status !== StudentStatus.ACTIVE) {
       throw new AuthzError("Murid tidak aktif");
+    }
+    if (student.requirePhotoForSession && !student.imageKey) {
+      return {
+        ok: false,
+        error:
+          "Murid ini wajib punya foto profil sebelum sesi. Unggah foto di halaman detail murid.",
+      };
     }
 
     const story = await prisma.story.findUnique({
@@ -140,7 +258,7 @@ export async function startLearningSession(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal memulai sesi belajar"),
+      error: toActionError(error, "Gagal memulai sesi belajar"),
     };
   }
 }
@@ -181,7 +299,7 @@ export async function addObservation(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal menyimpan catatan"),
+      error: toActionError(error, "Gagal menyimpan catatan"),
     };
   }
 }
@@ -226,7 +344,7 @@ export async function endLearningSession(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal mengakhiri sesi"),
+      error: toActionError(error, "Gagal mengakhiri sesi"),
     };
   }
 }
@@ -260,6 +378,11 @@ export type SessionForReader = {
     recordedAt: Date;
     recordedBy: { id: string; name: string };
   }>;
+  /** Preferensi pemandu sesi (ukuran teks + sakelar audio). */
+  preference: {
+    textSize: "SM" | "MD" | "LG" | "XL";
+    audioEnabled: boolean;
+  };
 };
 
 export async function getSessionForReader(
@@ -308,6 +431,15 @@ export async function getSessionForReader(
   if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
   await assertCanReadSession(user, session);
 
+  const preferenceRow = await prisma.userPreference.findUnique({
+    where: { userId: user.id },
+    select: { textSize: true, audioEnabled: true },
+  });
+  const preference = preferenceRow ?? {
+    textSize: "MD" as const,
+    audioEnabled: true,
+  };
+
   return {
     id: session.id,
     startedAt: session.startedAt,
@@ -334,5 +466,6 @@ export async function getSessionForReader(
         })),
     })),
     observations: session.observations,
+    preference,
   };
 }

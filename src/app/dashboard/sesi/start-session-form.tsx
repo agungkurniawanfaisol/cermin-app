@@ -37,15 +37,16 @@ export function StartSessionForm({
 
   if (students.length === 0) {
     return (
-      <p className="text-sm text-[var(--muted,#5c6b73)]">
-        Belum ada murid yang dapat Anda akses.
+      <p className="rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white px-4 py-6 text-sm text-[var(--cermin-muted,#5c6b73)]">
+        Belum ada murid yang dapat Anda akses. Minta admin menugaskan atau
+        menautkan murid terlebih dahulu.
       </p>
     );
   }
 
   if (stories.length === 0) {
     return (
-      <p className="text-sm text-[var(--muted,#5c6b73)]">
+      <p className="rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white px-4 py-6 text-sm text-[var(--cermin-muted,#5c6b73)]">
         Belum ada cerita terbit. Minta admin menerbitkan cerita terlebih dahulu.
       </p>
     );
@@ -54,7 +55,7 @@ export function StartSessionForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-4 rounded-xl border border-[var(--border,#d9e2ec)] bg-white p-6 shadow-sm"
+      className="w-full space-y-4 rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4 shadow-sm sm:p-5"
     >
       <div className="space-y-2">
         <Label htmlFor="sesi-murid">Murid</Label>
@@ -64,7 +65,7 @@ export function StartSessionForm({
           value={studentId}
           onChange={(e) => setStudentId(e.target.value)}
           disabled={pending}
-          className="flex h-9 w-full rounded-md border border-[var(--border,#d9e2ec)] bg-white px-3 text-sm"
+          className="flex h-11 w-full rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-3 text-base text-[var(--text,#1f2933)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)]"
         >
           {students.map((student) => (
             <option key={student.id} value={student.id}>
@@ -82,7 +83,7 @@ export function StartSessionForm({
           value={storyId}
           onChange={(e) => setStoryId(e.target.value)}
           disabled={pending}
-          className="flex h-9 w-full rounded-md border border-[var(--border,#d9e2ec)] bg-white px-3 text-sm"
+          className="flex h-11 w-full rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-3 text-base text-[var(--text,#1f2933)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)]"
         >
           {stories.map((story) => (
             <option key={story.id} value={story.id}>
@@ -93,12 +94,15 @@ export function StartSessionForm({
       </div>
 
       {error ? (
-        <p className="text-sm text-red-700" role="alert">
+        <p
+          className="text-sm text-[var(--danger,#9b2c2c)]"
+          role="alert"
+        >
           {error}
         </p>
       ) : null}
 
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
         {pending ? "Memulai…" : "Mulai sesi belajar"}
       </Button>
     </form>

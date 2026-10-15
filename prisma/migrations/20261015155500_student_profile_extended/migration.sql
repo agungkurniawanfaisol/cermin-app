@@ -1,0 +1,9 @@
+-- AlterTable
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "emergencyContactName" TEXT;
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "emergencyContactPhone" VARCHAR(32);
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "homeLanguage" TEXT;
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "preferQuiet" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "preferDimLight" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "sensoryNotes" TEXT;
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "allergies" TEXT;
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "requirePhotoForSession" BOOLEAN NOT NULL DEFAULT false;

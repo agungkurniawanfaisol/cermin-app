@@ -52,7 +52,7 @@ export function StatusActions({
           <Button
             key={to}
             type="button"
-            size="sm"
+            className="min-h-11 w-full sm:w-auto"
             variant={to === "ARCHIVED" ? "outline" : "default"}
             disabled={pending}
             onClick={() => onTransition(to)}

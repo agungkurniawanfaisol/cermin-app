@@ -1,13 +1,14 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { StoryStatus } from "@prisma/client";
 import {
   AuthzError,
+  canUserTransitionStoryStatus,
   requireSession,
   type PolicyUser,
 } from "@/server/policies/access";
 import {
-  canUserTransitionStoryStatus,
   getStoryDetail,
   listActiveCategories,
 } from "@/server/actions/stories";
@@ -18,6 +19,8 @@ import {
 import { PagesEditor } from "./pages-editor";
 import { StatusActions } from "./status-actions";
 import { StoryMetaForm } from "./story-meta-form";
+
+export const instant = false;
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draf",
@@ -49,12 +52,7 @@ function canEditContent(
   return false;
 }
 
-export default async function CeritaDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+async function CeritaDetailContent({ id }: { id: string }) {
   const user = await requireSession();
 
   let story;
@@ -83,7 +81,7 @@ export default async function CeritaDetailPage({
     .join("|");
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 space-y-10 px-4 py-10">
+    <main className="w-full flex-1 space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
       <div>
         <Link
           href="/dashboard/cerita"
@@ -141,4 +139,31 @@ export default async function CeritaDetailPage({
       />
     </main>
   );
+}
+
+export default function CeritaDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
+          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat cerita…</p>
+        </main>
+      }
+    >
+      <CeritaDetailLoader params={params} />
+    </Suspense>
+  );
+}
+
+async function CeritaDetailLoader({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  return <CeritaDetailContent id={id} />;
 }

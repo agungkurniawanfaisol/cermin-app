@@ -1,7 +1,10 @@
 import { StoryStatus } from "@prisma/client";
 import { headers } from "next/headers";
+import { connection } from "next/server";
+import { cache } from "react";
 import { auth, type SessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canTransitionStoryStatus } from "@/server/validations/story";
 
 export class AuthzError extends Error {
   constructor(
@@ -26,11 +29,48 @@ export type StoryEditTarget = {
   createdById: string;
 };
 
-export async function requireSession(): Promise<SessionUser> {
+/**
+ * Deduped per RSC request (layout + page share one call).
+ * Prefer role/status from Better Auth session (incl. cookie cache) to avoid
+ * an extra Supabase round-trip (~200ms+).
+ */
+export const requireSession = cache(async (): Promise<SessionUser> => {
+  // Next.js Cache Components: auth + any Date.now()/new Date() in session
+  // checks must run after a real request (not during static prerender).
+  await connection();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) throw new AuthzError("Silakan masuk", 401);
+
+  const sessionUser = session.user as {
+    id: string;
+    email: string;
+    name: string;
+    role?: SessionUser["role"];
+    status?: SessionUser["status"];
+  };
+
+  if (sessionUser.role && sessionUser.status) {
+    if (sessionUser.status !== "ACTIVE") {
+      throw new AuthzError("Akun nonaktif", 403);
+    }
+    return {
+      id: sessionUser.id,
+      email: sessionUser.email,
+      name: sessionUser.name,
+      role: sessionUser.role,
+      status: sessionUser.status,
+    };
+  }
+
   const user = await prisma.user.findUniqueOrThrow({
-    where: { id: session.user.id },
+    where: { id: sessionUser.id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      status: true,
+    },
   });
   if (user.status !== "ACTIVE") throw new AuthzError("Akun nonaktif", 403);
   return {
@@ -40,7 +80,7 @@ export async function requireSession(): Promise<SessionUser> {
     role: user.role,
     status: user.status,
   };
-}
+});
 
 export async function requireRole(
   ...roles: PolicyUser["role"][]
@@ -63,6 +103,29 @@ export function canAccessStudent(
 
 export function canPublishStory(user: PolicyUser): boolean {
   return user.status === "ACTIVE" && user.role === "ADMIN";
+}
+
+/** Structural transition + role matrix from ACCESS-CONTROL.md */
+export function canUserTransitionStoryStatus(
+  user: PolicyUser,
+  from: StoryStatus,
+  to: StoryStatus,
+): boolean {
+  if (user.status !== "ACTIVE") return false;
+  if (!canTransitionStoryStatus(from, to)) return false;
+
+  if (to === StoryStatus.PUBLISHED) {
+    return canPublishStory(user);
+  }
+
+  if (user.role === "ADMIN") return true;
+
+  if (user.role === "TERAPIS") {
+    // Terapis: submit review only (DRAFT → REVIEW)
+    return from === StoryStatus.DRAFT && to === StoryStatus.REVIEW;
+  }
+
+  return false;
 }
 
 export function canLeadSession(

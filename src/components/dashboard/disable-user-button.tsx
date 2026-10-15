@@ -22,11 +22,11 @@ export function DisableUserButton({ userId }: { userId: string }) {
       <Button
         type="button"
         variant="outline"
-        size="sm"
+        className="min-h-11 w-full sm:w-auto"
         onClick={onDisable}
         disabled={pending}
       >
-        {pending ? "…" : "Nonaktifkan"}
+        {pending ? "Memproses…" : "Nonaktifkan"}
       </Button>
       {error ? (
         <p className="text-xs text-[var(--danger,#9b2c2c)]" role="alert">

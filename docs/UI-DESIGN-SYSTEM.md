@@ -27,18 +27,19 @@ Jangan mencampur chrome dashboard (sidebar padat, tabel) ke dalam child mode.
 4. Kontras memenuhi target WCAG AA; fokus keyboard terlihat.
 5. Tanpa skor hukuman, negative scoring, atau leaderboard kompetitif.
 6. Motion hanya jika membantu orientasi (transisi halaman lembut, optional reduce-motion).
+7. **Wajib support mobile dan desktop** (mobile-first; touch target ~44px; tanpa overflow horizontal).
 
 ## 4. Tipografi
 
-### Child mode
+**Seluruh app** (dashboard + child mode) memakai stack Comic:
 
-- Primary: `"Comic Sans MS", "Comic Sans", "Chalkboard SE", "Marker Felt", cursive, sans-serif`
-- Body size default besar (contoh base 1.25–1.5rem); skala lewat `UserPreference.text_size`.
+```text
+"Comic Sans MS", "Comic Sans", "Comic Neue", "Chalkboard SE", "Marker Felt", cursive, sans-serif
+```
 
-### Dashboard
-
-- Sans humanis readable (bukan Inter-as-brand-default wajib; pilih satu stack jelas, e.g. `Source Sans 3` atau sistem + fallback yang konsisten).
-- Hindari dekorasi berlebih; Comic Sans **tidak** wajib di dashboard admin.
+- File di `public/fonts/` — **Comic Neue** (OFL). Comic Sans MS proprietary dan tidak di-redistribusi.
+- OS yang punya Comic Sans MS memakainya dulu; lainnya memakai Comic Neue lokal.
+- Child mode: body size lebih besar (≈1.35rem); skala lewat `UserPreference.text_size` bila diaktifkan.
 
 ## 5. Warna (arah awal — CSS variables)
 

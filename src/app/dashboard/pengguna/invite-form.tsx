@@ -51,7 +51,7 @@ export function InviteForm() {
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-[var(--border,#d9e2ec)] bg-white p-6 shadow-sm">
+    <div className="space-y-4 rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4 shadow-sm sm:p-5">
       <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-1">
           <Label htmlFor="invite-name">Nama</Label>
@@ -81,7 +81,7 @@ export function InviteForm() {
           <select
             id="invite-role"
             name="role"
-            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+            className="flex h-11 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
             value={role}
             onChange={(e) =>
               setRole(e.target.value as (typeof ROLES)[number]["value"])
@@ -96,7 +96,7 @@ export function InviteForm() {
           </select>
         </div>
         <div className="flex items-end sm:col-span-1">
-          <Button type="submit" className="h-9 w-full sm:w-auto" disabled={pending}>
+          <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
             {pending ? "Membuat…" : "Buat undangan"}
           </Button>
         </div>
@@ -109,14 +109,19 @@ export function InviteForm() {
       ) : null}
 
       {inviteUrl ? (
-        <div className="space-y-2 rounded-lg border border-[var(--accent,#3d7c6b)]/30 bg-[var(--bg,#f7f4ef)] p-4">
+        <div className="space-y-2 rounded-lg border border-[var(--cermin-accent,#3d7c6b)]/30 bg-[var(--bg,#f7f4ef)] p-4">
           <p className="text-sm font-medium text-[var(--text,#1f2933)]">
             Tautan undangan (salin dan kirim secara manual):
           </p>
           <p className="break-all font-mono text-xs text-[var(--muted,#5c6b73)]">
             {inviteUrl}
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={copyLink}>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 w-full sm:w-auto"
+            onClick={copyLink}
+          >
             Salin tautan
           </Button>
         </div>

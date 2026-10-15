@@ -65,7 +65,7 @@ function MediaPreview({ item }: { item: PageMediaItem }) {
 
   if (item.kind === "AUDIO") {
     return (
-      <audio controls src={url} className="w-full max-w-md" preload="none" />
+      <audio controls src={url} className="w-full" preload="none" />
     );
   }
 
@@ -122,7 +122,7 @@ export function PageMediaUploader({
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-[var(--border,#d9e2ec)] bg-[var(--surface,#f7fafc)] p-4">
+    <div className="space-y-3 rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] p-4">
       <p className="text-sm font-medium text-[var(--text,#1f2933)]">Media</p>
 
       {media.length === 0 ? (
@@ -152,7 +152,7 @@ export function PageMediaUploader({
                 setKind(e.target.value === "AUDIO" ? "AUDIO" : "IMAGE")
               }
               disabled={pending}
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+              className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
             >
               <option value="IMAGE">Gambar</option>
               <option value="AUDIO">Audio</option>
@@ -194,7 +194,11 @@ export function PageMediaUploader({
             </div>
           ) : null}
 
-          <Button type="submit" size="sm" disabled={pending}>
+          <Button
+            type="submit"
+            className="min-h-11 w-full sm:w-auto"
+            disabled={pending}
+          >
             {pending ? "Mengunggah…" : "Unggah media"}
           </Button>
 

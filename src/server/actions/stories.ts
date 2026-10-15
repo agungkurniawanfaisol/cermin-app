@@ -7,18 +7,24 @@ import {
   type StoryPage,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import {
+  paginationMeta,
+  parseListQuery,
+  toListResult,
+  type ListQueryInput,
+  type ListResult,
+} from "@/lib/list-query";
+import {
   AuthzError,
   assertCanEditStoryContent,
-  canPublishStory,
+  canUserTransitionStoryStatus,
   requireRole,
   requireSession,
-  type PolicyUser,
 } from "@/server/policies/access";
 import {
-  canTransitionStoryStatus,
   createPageSchema,
   createStorySchema,
   pageIdSchema,
@@ -39,38 +45,9 @@ export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
 export type ActionResult<T> = ActionOk<T> | ActionErr;
 
-function toErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof AuthzError) return error.message;
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
-
 function revalidateStoryPaths(storyId?: string): void {
   revalidatePath("/dashboard/cerita");
   if (storyId) revalidatePath(`/dashboard/cerita/${storyId}`);
-}
-
-/** Structural transition + role matrix from ACCESS-CONTROL.md */
-export function canUserTransitionStoryStatus(
-  user: PolicyUser,
-  from: StoryStatus,
-  to: StoryStatus,
-): boolean {
-  if (user.status !== "ACTIVE") return false;
-  if (!canTransitionStoryStatus(from, to)) return false;
-
-  if (to === StoryStatus.PUBLISHED) {
-    return canPublishStory(user);
-  }
-
-  if (user.role === "ADMIN") return true;
-
-  if (user.role === "TERAPIS") {
-    // Terapis: submit review only (DRAFT → REVIEW)
-    return from === StoryStatus.DRAFT && to === StoryStatus.REVIEW;
-  }
-
-  return false;
 }
 
 export type ListedCategory = {
@@ -88,6 +65,7 @@ export type ListedCategory = {
   }>;
 };
 
+/** @deprecated Prefer listStoriesForViewer for paginated dashboard lists. */
 export async function listStoriesByCategory(): Promise<ListedCategory[]> {
   const user = await requireSession();
 
@@ -116,6 +94,107 @@ export async function listStoriesByCategory(): Promise<ListedCategory[]> {
   });
 
   return categories;
+}
+
+export type ListedStory = {
+  id: string;
+  title: string;
+  status: StoryStatus;
+  publishedAt: Date | null;
+  updatedAt: Date;
+  createdAt: Date;
+  category: { id: string; name: string };
+  createdBy: { id: string; name: string };
+};
+
+const STORY_STATUSES = [
+  "DRAFT",
+  "REVIEW",
+  "APPROVED",
+  "PUBLISHED",
+  "ARCHIVED",
+  "ALL",
+] as const;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function listStoriesForViewer(
+  raw: ListQueryInput = {},
+): Promise<ListResult<ListedStory>> {
+  const user = await requireSession();
+  const parsed = parseListQuery(raw, {
+    allowedSort: ["title", "updatedAt", "createdAt"],
+    defaultSort: "updatedAt",
+    defaultOrder: "desc",
+    filters: {
+      status: STORY_STATUSES,
+    },
+  });
+
+  const categoryIdRaw =
+    typeof raw.categoryId === "string" ? raw.categoryId.trim() : "";
+  const categoryId = UUID_RE.test(categoryIdRaw) ? categoryIdRaw : undefined;
+
+  const and: Prisma.StoryWhereInput[] = [];
+
+  if (user.role === "ORANG_TUA") {
+    and.push({ status: StoryStatus.PUBLISHED });
+  } else if (
+    parsed.filters.status &&
+    parsed.filters.status !== "ALL"
+  ) {
+    and.push({ status: parsed.filters.status as StoryStatus });
+  }
+
+  if (categoryId) {
+    and.push({ categoryId });
+  }
+
+  if (parsed.q) {
+    and.push({
+      OR: [
+        { title: { contains: parsed.q, mode: "insensitive" } },
+        { description: { contains: parsed.q, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  const where: Prisma.StoryWhereInput =
+    and.length === 0 ? {} : { AND: and };
+
+  const orderBy: Prisma.StoryOrderByWithRelationInput =
+    parsed.sort === "title"
+      ? { title: parsed.order }
+      : parsed.sort === "createdAt"
+        ? { createdAt: parsed.order }
+        : { updatedAt: parsed.order };
+
+  const total = await prisma.story.count({ where });
+  const meta = paginationMeta({
+    page: parsed.page,
+    pageSize: parsed.pageSize,
+    total,
+  });
+
+  const items = await prisma.story.findMany({
+    where,
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      publishedAt: true,
+      updatedAt: true,
+      createdAt: true,
+      category: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
+    orderBy,
+    skip: meta.skip,
+    take: meta.take,
+  });
+
+  return toListResult(items, meta);
 }
 
 export type StoryPageMedia = {
@@ -185,6 +264,18 @@ export async function listActiveCategories(): Promise<
   });
 }
 
+/** Kategori aktif untuk filter daftar (semua peran yang sudah login). */
+export async function listCategoriesForFilter(): Promise<
+  Array<{ id: string; name: string }>
+> {
+  await requireSession();
+  return prisma.storyCategory.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { sortOrder: "asc" },
+  });
+}
+
 export async function createStory(
   input: CreateStoryInput,
 ): Promise<ActionResult<{ id: string }>> {
@@ -229,7 +320,7 @@ export async function createStory(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal membuat cerita"),
+      error: toActionError(error, "Gagal membuat cerita"),
     };
   }
 }
@@ -294,7 +385,7 @@ export async function updateStory(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal memperbarui cerita"),
+      error: toActionError(error, "Gagal memperbarui cerita"),
     };
   }
 }
@@ -347,7 +438,7 @@ export async function createStoryPage(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal menambah halaman"),
+      error: toActionError(error, "Gagal menambah halaman"),
     };
   }
 }
@@ -384,7 +475,7 @@ export async function updateStoryPage(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal memperbarui halaman"),
+      error: toActionError(error, "Gagal memperbarui halaman"),
     };
   }
 }
@@ -445,7 +536,7 @@ export async function deleteStoryPage(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal menghapus halaman"),
+      error: toActionError(error, "Gagal menghapus halaman"),
     };
   }
 }
@@ -504,7 +595,7 @@ export async function reorderStoryPages(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal mengurutkan halaman"),
+      error: toActionError(error, "Gagal mengurutkan halaman"),
     };
   }
 }
@@ -641,7 +732,7 @@ export async function transitionStoryStatus(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal mengubah status cerita"),
+      error: toActionError(error, "Gagal mengubah status cerita"),
     };
   }
 }

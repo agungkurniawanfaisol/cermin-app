@@ -46,10 +46,14 @@ export function AcceptInviteForm({ token }: { token: string }) {
           autoComplete="new-password"
           required
           minLength={8}
+          maxLength={128}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={pending}
         />
+        <p className="text-sm text-[var(--muted,#5c6b73)]">
+          Minimal 8 karakter, harus ada huruf dan angka.
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="confirm">Konfirmasi kata sandi</Label>

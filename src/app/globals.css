@@ -2,14 +2,53 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Comic Sans MS when installed; otherwise bundled Comic Neue (OFL) */
+@font-face {
+  font-family: "Comic Neue";
+  src: url("/fonts/ComicNeue-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Comic Neue";
+  src: url("/fonts/ComicNeue-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Comic Neue";
+  src: url("/fonts/ComicNeue-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Comic Neue";
+  src: url("/fonts/ComicNeue-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Comic Neue";
+  src: url("/fonts/ComicNeue-BoldItalic.woff2") format("woff2");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: "Comic Sans MS", "Comic Sans", "Comic Neue", "Chalkboard SE",
+    "Marker Felt", cursive, sans-serif;
+  --font-mono: "Comic Sans MS", "Comic Sans", "Comic Neue", cursive, monospace;
+  --font-heading: "Comic Sans MS", "Comic Sans", "Comic Neue", cursive,
+    sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,24 +88,37 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* CERMIN design tokens (docs/UI-DESIGN-SYSTEM.md)
+     --cermin-* avoids clash with shadcn --accent/--muted (bg surfaces). */
+  --bg: #f7f4ef;
+  --surface: #ffffff;
+  --text: #1f2933;
+  --cermin-muted: #5c6b73;
+  --cermin-border: #d9e2ec;
+  --cermin-accent: #3d7c6b;
+  --accent-soft: #e6f2ee;
+  --focus: #0b6e4f;
+  --danger: #9b2c2c;
+  --success: #2f6f4e;
+
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary: var(--cermin-accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--accent-soft);
+  --secondary-foreground: var(--text);
+  --muted: var(--accent-soft);
+  --muted-foreground: var(--cermin-muted);
+  --accent: var(--accent-soft);
+  --accent-foreground: var(--text);
+  --destructive: var(--danger);
+  --border: var(--cermin-border);
+  --input: var(--cermin-border);
+  --ring: var(--focus);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -75,12 +127,12 @@
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-primary: var(--cermin-accent);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--accent-soft);
+  --sidebar-accent-foreground: var(--text);
+  --sidebar-border: var(--cermin-border);
+  --sidebar-ring: var(--focus);
 }
 
 .dark {
@@ -121,10 +173,51 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  button,
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--cermin-accent) 28%, white);
+    color: var(--text);
+  }
+}
+
+/* Landing: one soft entrance + calm ambient (respects prefers-reduced-motion via Tailwind motion-*) */
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero {
+    opacity: 1;
+    transform: none;
   }
 }

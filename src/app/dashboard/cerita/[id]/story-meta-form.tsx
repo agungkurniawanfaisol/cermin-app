@@ -60,7 +60,7 @@ export function StoryMetaForm({
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-[var(--border,#d9e2ec)] bg-white p-6">
+    <div className="space-y-4 rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4 sm:p-5">
       <h2 className="text-lg font-semibold text-[var(--text,#1f2933)]">
         Metadata
       </h2>
@@ -72,7 +72,7 @@ export function StoryMetaForm({
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
             disabled={pending || readOnly}
-            className="flex h-9 w-full rounded-md border border-[var(--border,#d9e2ec)] bg-white px-3 text-sm disabled:opacity-60"
+            className="flex h-11 w-full rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-3 text-base disabled:opacity-60"
           >
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -113,7 +113,7 @@ export function StoryMetaForm({
         </div>
         {!readOnly ? (
           <div>
-            <Button type="submit" className="h-9" disabled={pending}>
+            <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
               {pending ? "Menyimpan…" : "Simpan metadata"}
             </Button>
           </div>

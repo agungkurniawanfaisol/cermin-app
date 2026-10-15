@@ -1,6 +1,9 @@
+import { Suspense } from "react";
 import { AcceptInviteForm } from "./accept-invite-form";
 
-export default async function TerimaUndanganPage({
+export const instant = false;
+
+async function TerimaUndanganContent({
   searchParams,
 }: {
   searchParams: Promise<{ token?: string }>;
@@ -9,8 +12,8 @@ export default async function TerimaUndanganPage({
   const token = params.token ?? "";
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-[var(--bg,#f7f4ef)] px-4 py-12">
-      <main className="w-full max-w-md space-y-8">
+    <div className="flex flex-1 items-center justify-center bg-[var(--bg,#f7f4ef)] px-4 py-12 sm:px-6 md:px-8">
+      <main className="w-full max-w-2xl space-y-8">
         <div className="space-y-2 text-center">
           <p className="text-sm font-medium tracking-wide text-[var(--accent,#3d7c6b)] uppercase">
             CERMIN
@@ -35,5 +38,23 @@ export default async function TerimaUndanganPage({
         )}
       </main>
     </div>
+  );
+}
+
+export default function TerimaUndanganPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex flex-1 items-center justify-center px-4 py-6 font-sans text-[var(--muted,#5c6b73)] sm:px-6 sm:py-8">
+          Memuat…
+        </main>
+      }
+    >
+      <TerimaUndanganContent searchParams={searchParams} />
+    </Suspense>
   );
 }

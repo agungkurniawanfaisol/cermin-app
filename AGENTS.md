@@ -6,7 +6,9 @@ Panduan singkat untuk agent AI di repo ini.
 
 ## This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing Next.js-specific code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
 
@@ -55,3 +57,4 @@ Bahasa produk: **Indonesia**.
 4. Rahasia hanya env server. Jangan `NEXT_PUBLIC_` untuk service role / DB password.
 5. Child mode: tenang, no autoplay, Comic Sans + fallback.
 6. Local default: `docker compose up --build` dengan hot reload.
+7. **Setiap UI wajib usable di mobile dan desktop** (mobile-first). Sebelum selesai, cek mental ~375px dan ~1280px: tidak overflow-x, touch target cukup, CTA terbaca. Lihat `.cursor/rules/responsive-viewport.mdc` dan skill `cermin-responsive-ui`.

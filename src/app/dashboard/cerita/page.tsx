@@ -1,111 +1,145 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import { ListFilters } from "@/components/dashboard/list-filters";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { StoryList } from "@/components/dashboard/story-list";
+import type { ListQueryInput } from "@/lib/list-query";
 import { requireSession } from "@/server/policies/access";
 import {
-  listActiveCategories,
-  listStoriesByCategory,
+  listCategoriesForFilter,
+  listStoriesForViewer,
 } from "@/server/actions/stories";
-import { CreateStoryForm } from "./create-story-form";
 
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Draf",
-  REVIEW: "Review",
-  APPROVED: "Disetujui",
-  PUBLISHED: "Terbit",
-  ARCHIVED: "Arsip",
-};
+export const instant = false;
 
-export default async function CeritaPage() {
+function toInput(
+  sp: Record<string, string | string[] | undefined>,
+): ListQueryInput {
+  return sp;
+}
+
+async function CeritaContent({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireSession();
   const canManage = user.role === "ADMIN" || user.role === "TERAPIS";
-  const categories = await listStoriesByCategory();
-  const activeCategories = canManage ? await listActiveCategories() : [];
+  const raw = toInput(await searchParams);
+
+  const [result, categoryOptions] = await Promise.all([
+    listStoriesForViewer(raw),
+    listCategoriesForFilter(),
+  ]);
+
+  const flatParams: Record<string, string | undefined> = {
+    q: typeof raw.q === "string" ? raw.q : undefined,
+    status: typeof raw.status === "string" ? raw.status : undefined,
+    categoryId: typeof raw.categoryId === "string" ? raw.categoryId : undefined,
+    sort: typeof raw.sort === "string" ? raw.sort : undefined,
+    order: typeof raw.order === "string" ? raw.order : undefined,
+  };
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
-      <p className="text-sm font-medium tracking-wide text-[var(--accent,#3d7c6b)] uppercase">
+    <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
+      <p className="text-sm font-medium tracking-wide text-[var(--cermin-accent,#3d7c6b)] uppercase">
         CERMIN
       </p>
-      <h1 className="mt-2 text-3xl font-semibold text-[var(--text,#1f2933)]">
-        Cerita
-      </h1>
-      <p className="mt-2 text-sm text-[var(--muted,#5c6b73)]">
-        {user.role === "ORANG_TUA"
-          ? "Cerita yang sudah diterbitkan."
-          : "Kelola cerita sosial berdasarkan kategori dan alur status."}
-      </p>
-
-      {canManage ? (
-        <section className="mt-8 space-y-3">
-          <h2 className="text-lg font-semibold text-[var(--text,#1f2933)]">
-            Buat cerita baru
-          </h2>
-          <CreateStoryForm categories={activeCategories} />
-        </section>
-      ) : null}
-
-      <section className="mt-10 space-y-8">
-        {categories.map((category) => (
-          <div key={category.id} className="space-y-3">
-            <h2 className="text-lg font-semibold text-[var(--text,#1f2933)]">
-              {category.name}
-            </h2>
-            {category.description ? (
-              <p className="text-sm text-[var(--muted,#5c6b73)]">
-                {category.description}
-              </p>
-            ) : null}
-            <div className="overflow-x-auto rounded-xl border border-[var(--border,#d9e2ec)] bg-white">
-              <table className="w-full min-w-[28rem] text-left text-sm">
-                <thead className="border-b border-[var(--border,#d9e2ec)] bg-[var(--bg,#f7f4ef)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Judul</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Pembuat</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {category.stories.map((story) => (
-                    <tr
-                      key={story.id}
-                      className="border-b border-[var(--border,#d9e2ec)] last:border-0"
-                    >
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/dashboard/cerita/${story.id}`}
-                          className="font-medium text-[var(--accent,#3d7c6b)] hover:underline"
-                        >
-                          {story.title}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3">
-                        {STATUS_LABEL[story.status] ?? story.status}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--muted,#5c6b73)]">
-                        {story.createdBy.name}
-                      </td>
-                    </tr>
-                  ))}
-                  {category.stories.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={3}
-                        className="px-4 py-6 text-center text-[var(--muted,#5c6b73)]"
-                      >
-                        Belum ada cerita di kategori ini.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
-        {categories.length === 0 ? (
-          <p className="text-sm text-[var(--muted,#5c6b73)]">
-            Belum ada kategori cerita. Jalankan seed database.
+      <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold text-[var(--text,#1f2933)]">
+            Cerita
+          </h1>
+          <p className="mt-2 text-sm text-[var(--cermin-muted,#5c6b73)]">
+            {user.role === "ORANG_TUA"
+              ? "Cerita yang sudah diterbitkan."
+              : "Kelola cerita sosial berdasarkan kategori dan alur status."}
           </p>
+        </div>
+        {canManage ? (
+          <Link
+            href="/dashboard/cerita/baru"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-[var(--cermin-accent,#3d7c6b)] px-4 text-sm font-medium text-white transition-colors hover:bg-[var(--focus,#0b6e4f)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2"
+          >
+            Buat cerita
+          </Link>
         ) : null}
+      </div>
+
+      <div className="mt-6">
+        <ListFilters
+          searchPlaceholder="Cari judul cerita…"
+          defaultSortValue="updatedAt:desc"
+          filters={[
+            ...(canManage
+              ? [
+                  {
+                    name: "status",
+                    label: "Status",
+                    allLabel: "Semua status",
+                    options: [
+                      { value: "DRAFT", label: "Draf" },
+                      { value: "REVIEW", label: "Review" },
+                      { value: "APPROVED", label: "Disetujui" },
+                      { value: "PUBLISHED", label: "Terbit" },
+                      { value: "ARCHIVED", label: "Arsip" },
+                    ],
+                  },
+                ]
+              : []),
+            {
+              name: "categoryId",
+              label: "Kategori",
+              allLabel: "Semua kategori",
+              options: categoryOptions.map((c) => ({
+                value: c.id,
+                label: c.name,
+              })),
+            },
+          ]}
+          sortOptions={[
+            { value: "updatedAt:desc", label: "Terbaru diubah" },
+            { value: "updatedAt:asc", label: "Terlama diubah" },
+            { value: "title:asc", label: "Judul A→Z" },
+            { value: "title:desc", label: "Judul Z→A" },
+            { value: "createdAt:desc", label: "Terbaru dibuat" },
+            { value: "createdAt:asc", label: "Terlama dibuat" },
+          ]}
+        />
+      </div>
+
+      <section className="mt-6 space-y-3">
+        <h2 className="text-lg font-semibold text-[var(--text,#1f2933)]">
+          Daftar cerita
+        </h2>
+        <StoryList stories={result.items} canManage={canManage} />
+        <ListPagination
+          page={result.page}
+          totalPages={result.totalPages}
+          total={result.total}
+          pageSize={result.pageSize}
+          searchParams={flatParams}
+          basePath="/dashboard/cerita"
+        />
       </section>
     </main>
+  );
+}
+
+export default function CeritaPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
+          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat cerita…</p>
+        </main>
+      }
+    >
+      <CeritaContent searchParams={searchParams} />
+    </Suspense>
   );
 }

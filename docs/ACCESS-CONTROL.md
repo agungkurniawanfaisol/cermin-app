@@ -128,13 +128,21 @@ published → draft (new edit cycle; version snapshot on publish)
 
 ## 10. Audit events (minimum)
 
-- user.invite / user.disable
-- student.create / student.update
-- assignment.create / assignment.end
-- parent_link.create / parent_link.deactivate
-- story.publish / story.archive
-- media.upload
-- session.start / session.end
+String `action` di kode (lihat `src/lib/audit-actions.ts`):
+
+| Akses kontrol (nama konsep)   | `action` di DB        |
+| ----------------------------- | --------------------- |
+| user.invite                   | `invite.create`       |
+| (accept invite)               | `invite.accept`       |
+| user.disable                  | `user.disable`        |
+| student.create / update       | `student.create` / `student.update` |
+| assignment.create / end       | `assignment.assign` / `assignment.end` |
+| parent_link.create / deactivate | `parent.link` / `parent.unlink` |
+| story.publish / archive       | `story.publish` / `story.archive` |
+| media.upload                  | `media.upload`        |
+| session.start / end           | `session.start` / `session.end` |
+
+Metadata lewat `sanitizeAuditMetadata` — tidak menyimpan password, token, `adminNotes`, atau isi observasi.
 
 ## 11. Threat notes
 

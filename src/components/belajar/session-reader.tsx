@@ -10,6 +10,16 @@ import {
 import { ObservationPanel } from "./observation-panel";
 import { PageAudioButton, PageImage } from "./page-media";
 
+const TEXT_SIZE_CLASS: Record<
+  SessionForReader["preference"]["textSize"],
+  string
+> = {
+  SM: "text-xl leading-relaxed sm:text-2xl",
+  MD: "text-2xl leading-relaxed sm:text-3xl",
+  LG: "text-3xl leading-relaxed sm:text-4xl",
+  XL: "text-4xl leading-relaxed sm:text-5xl",
+};
+
 export function SessionReader({ session }: { session: SessionForReader }) {
   const router = useRouter();
   const [pageIndex, setPageIndex] = useState(0);
@@ -20,6 +30,8 @@ export function SessionReader({ session }: { session: SessionForReader }) {
   const pages = session.pages;
   const page = pages[pageIndex] ?? null;
   const total = pages.length;
+  const bodyClass = TEXT_SIZE_CLASS[session.preference.textSize];
+  const showAudio = session.preference.audioEnabled;
 
   const primaryImage = useMemo(
     () => page?.images[0] ?? null,
@@ -53,7 +65,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
 
   if (total === 0) {
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 py-8">
+      <main className="mx-auto flex min-h-dvh w-full max-w-none flex-col px-4 py-8 sm:px-6 md:px-10 lg:px-12">
         <p className="text-lg text-[#5c6b73]">
           Cerita ini belum punya halaman.
         </p>
@@ -68,7 +80,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 py-6 sm:py-10">
+    <main className="mx-auto flex min-h-dvh w-full max-w-none flex-col px-4 py-6 sm:px-6 sm:py-10 md:px-10 lg:px-12">
       <header className="mb-6 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="text-base font-semibold tracking-wide text-[#3d7c6b] uppercase">
@@ -92,26 +104,28 @@ export function SessionReader({ session }: { session: SessionForReader }) {
           <PageImage key={primaryImage.id} image={primaryImage} />
         ) : null}
 
-        <p className="whitespace-pre-wrap text-center text-2xl leading-relaxed sm:text-3xl">
+        <p
+          className={`whitespace-pre-wrap text-center text-[var(--text,#1f2933)] ${bodyClass}`}
+        >
           {page?.bodyText?.trim()
             ? page.bodyText
             : "Halaman ini belum ada teks."}
         </p>
 
-        {primaryAudio ? (
+        {showAudio && primaryAudio ? (
           <PageAudioButton key={primaryAudio.id} audio={primaryAudio} />
         ) : null}
       </section>
 
       <nav
-        className="mt-10 flex flex-wrap items-center justify-center gap-4"
+        className="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-4"
         aria-label="Navigasi halaman"
       >
         <button
           type="button"
           onClick={goPrev}
           disabled={pageIndex === 0}
-          className="min-h-16 min-w-[10rem] rounded-2xl border-2 border-[#d9e2ec] bg-white px-8 py-4 text-2xl font-semibold text-[#1f2933] shadow-sm hover:bg-[#eef6f2] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b] disabled:opacity-40"
+          className="inline-flex min-h-14 w-full items-center justify-center rounded-2xl border-2 border-[#d9e2ec] bg-white px-6 py-3 text-xl font-semibold text-[#1f2933] shadow-sm hover:bg-[#eef6f2] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b] disabled:opacity-40 sm:min-h-16 sm:w-auto sm:min-w-[10rem] sm:px-8 sm:py-4 sm:text-2xl"
         >
           Sebelumnya
         </button>
@@ -119,16 +133,16 @@ export function SessionReader({ session }: { session: SessionForReader }) {
           type="button"
           onClick={goNext}
           disabled={pageIndex >= total - 1}
-          className="min-h-16 min-w-[10rem] rounded-2xl border-2 border-[#3d7c6b] bg-[#3d7c6b] px-8 py-4 text-2xl font-semibold text-white shadow-sm hover:bg-[#34695b] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b] disabled:opacity-40"
+          className="inline-flex min-h-14 w-full items-center justify-center rounded-2xl border-2 border-[#3d7c6b] bg-[#3d7c6b] px-6 py-3 text-xl font-semibold text-white shadow-sm hover:bg-[#34695b] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b] disabled:opacity-40 sm:min-h-16 sm:w-auto sm:min-w-[10rem] sm:px-8 sm:py-4 sm:text-2xl"
         >
           Berikutnya
         </button>
       </nav>
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-base">
+      <div className="mt-6 flex flex-col gap-3 text-base sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <Link
           href="/dashboard/sesi"
-          className="text-[#5c6b73] underline underline-offset-2 hover:text-[#3d7c6b]"
+          className="inline-flex min-h-11 items-center text-[#5c6b73] underline underline-offset-2 hover:text-[#3d7c6b]"
         >
           Kembali ke dasbor
         </Link>
@@ -137,7 +151,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
             type="button"
             onClick={onEndSession}
             disabled={pending}
-            className="rounded-lg border border-[#d9e2ec] bg-white px-4 py-2 font-semibold text-[#5c6b73] hover:bg-[#f0ebe3] disabled:opacity-50"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-[#d9e2ec] bg-white px-4 font-semibold text-[#5c6b73] hover:bg-[#f0ebe3] disabled:opacity-50 sm:w-auto"
           >
             {pending ? "Mengakhiri…" : "Akhiri sesi"}
           </button>

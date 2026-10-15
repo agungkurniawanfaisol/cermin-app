@@ -3,10 +3,8 @@ import type { ReactNode } from "react";
 export default function BelajarLayout({ children }: { children: ReactNode }) {
   return (
     <div
-      className="belajar-root"
+      className="belajar-root font-sans"
       style={{
-        fontFamily:
-          '"Comic Sans MS", "Comic Sans", "Chalkboard SE", "Marker Felt", cursive, sans-serif',
         background: "#F7F4EF",
         color: "#1f2933",
         minHeight: "100dvh",

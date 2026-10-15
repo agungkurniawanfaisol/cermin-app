@@ -58,7 +58,7 @@ export function LinkParentForm({
         <Label htmlFor="link-parent">Orang tua</Label>
         <select
           id="link-parent"
-          className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+          className="flex h-11 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
           value={parentId}
           onChange={(e) => setParentId(e.target.value)}
           disabled={pending}
@@ -81,7 +81,7 @@ export function LinkParentForm({
         />
       </div>
       <div className="flex items-end sm:col-span-1">
-        <Button type="submit" className="h-9 w-full sm:w-auto" disabled={pending}>
+        <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
           {pending ? "Menautkan…" : "Tautkan"}
         </Button>
       </div>

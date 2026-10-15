@@ -51,7 +51,7 @@ export function CreateStoryForm({
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-[var(--border,#d9e2ec)] bg-white p-6 shadow-sm">
+    <div className="space-y-4 rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4 shadow-sm sm:p-5">
       <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-1">
           <Label htmlFor="story-category">Kategori</Label>
@@ -62,7 +62,7 @@ export function CreateStoryForm({
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
             disabled={pending}
-            className="flex h-9 w-full rounded-md border border-[var(--border,#d9e2ec)] bg-white px-3 text-sm"
+            className="flex h-11 w-full rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-3 text-base"
           >
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -105,7 +105,7 @@ export function CreateStoryForm({
           />
         </div>
         <div className="sm:col-span-2">
-          <Button type="submit" className="h-9" disabled={pending}>
+          <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
             {pending ? "Menyimpan…" : "Buat draf cerita"}
           </Button>
         </div>

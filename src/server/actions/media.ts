@@ -3,14 +3,15 @@
 import { MediaKind, type MediaAsset } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
-  AuthzError,
   assertCanEditStoryContent,
   requireRole,
 } from "@/server/policies/access";
+import { uploadMediaMetaSchema } from "@/server/validations/media";
 
 export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
@@ -32,16 +33,10 @@ const MIME_EXT: Record<string, string> = {
   "audio/ogg": "ogg",
 };
 
-function toErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof AuthzError) return error.message;
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
-
-function parseKind(raw: FormDataEntryValue | null): MediaKind | null {
-  if (raw === "IMAGE" || raw === MediaKind.IMAGE) return MediaKind.IMAGE;
-  if (raw === "AUDIO" || raw === MediaKind.AUDIO) return MediaKind.AUDIO;
-  return null;
+function formString(value: FormDataEntryValue | null): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 /**
@@ -59,45 +54,30 @@ export async function uploadMedia(
       return { ok: false, error: "File media wajib diunggah" };
     }
 
-    const kind = parseKind(formData.get("kind"));
-    if (!kind) {
-      return { ok: false, error: "Jenis media harus IMAGE atau AUDIO" };
-    }
-
-    const pageIdRaw = formData.get("pageId");
-    const storyIdRaw = formData.get("storyId");
-    const pageId =
-      typeof pageIdRaw === "string" && pageIdRaw.length > 0
-        ? pageIdRaw
-        : null;
-    const storyIdInput =
-      typeof storyIdRaw === "string" && storyIdRaw.length > 0
-        ? storyIdRaw
-        : null;
-
-    if (!pageId && !storyIdInput) {
-      return { ok: false, error: "pageId atau storyId wajib diisi" };
-    }
-
-    const altTextRaw = formData.get("altText");
-    const altText =
-      typeof altTextRaw === "string" ? altTextRaw.trim() : "";
-
-    if (kind === MediaKind.IMAGE && !altText) {
+    const meta = uploadMediaMetaSchema.safeParse({
+      kind: formString(formData.get("kind")),
+      pageId: formString(formData.get("pageId")),
+      storyId: formString(formData.get("storyId")),
+      altText: formString(formData.get("altText")),
+    });
+    if (!meta.success) {
       return {
         ok: false,
-        error: "Teks alternatif (altText) wajib untuk gambar",
+        error: meta.error.issues[0]?.message ?? "Data tidak valid",
       };
     }
 
+    const { kind, pageId, storyId: storyIdInput, altText = "" } = meta.data;
+    const mediaKind = kind === "IMAGE" ? MediaKind.IMAGE : MediaKind.AUDIO;
+
     const mimeType = fileEntry.type;
-    if (kind === MediaKind.IMAGE && !IMAGE_MIMES.has(mimeType)) {
+    if (mediaKind === MediaKind.IMAGE && !IMAGE_MIMES.has(mimeType)) {
       return {
         ok: false,
         error: "Gambar harus berformat JPEG, PNG, atau WebP",
       };
     }
-    if (kind === MediaKind.AUDIO && !AUDIO_MIMES.has(mimeType)) {
+    if (mediaKind === MediaKind.AUDIO && !AUDIO_MIMES.has(mimeType)) {
       return {
         ok: false,
         error: "Audio harus berformat MPEG, WAV, atau OGG",
@@ -105,19 +85,19 @@ export async function uploadMedia(
     }
 
     const maxBytes =
-      kind === MediaKind.IMAGE ? IMAGE_MAX_BYTES : AUDIO_MAX_BYTES;
+      mediaKind === MediaKind.IMAGE ? IMAGE_MAX_BYTES : AUDIO_MAX_BYTES;
     if (fileEntry.size > maxBytes) {
       return {
         ok: false,
         error:
-          kind === MediaKind.IMAGE
+          mediaKind === MediaKind.IMAGE
             ? "Ukuran gambar maksimal 5 MB"
             : "Ukuran audio maksimal 10 MB",
       };
     }
 
     let storyId: string;
-    const resolvedPageId: string | null = pageId;
+    const resolvedPageId: string | null = pageId ?? null;
 
     if (pageId) {
       const page = await prisma.storyPage.findUnique({
@@ -162,10 +142,7 @@ export async function uploadMedia(
       });
 
     if (uploadError) {
-      return {
-        ok: false,
-        error: `Gagal mengunggah media: ${uploadError.message}`,
-      };
+      return { ok: false, error: "Gagal mengunggah media" };
     }
 
     const maxSort = await prisma.mediaAsset.aggregate({
@@ -182,12 +159,12 @@ export async function uploadMedia(
         data: {
           storyId,
           pageId: resolvedPageId,
-          kind,
+          kind: mediaKind,
           storageBucket: BUCKET,
           storageKey,
           mimeType,
           byteSize: fileEntry.size,
-          altText: kind === MediaKind.IMAGE ? altText : altText || null,
+          altText: mediaKind === MediaKind.IMAGE ? altText : altText || null,
           sortOrder,
           createdById: user.id,
         },
@@ -205,7 +182,7 @@ export async function uploadMedia(
       metadata: {
         storyId,
         pageId: resolvedPageId,
-        kind,
+        kind: mediaKind,
         mimeType,
         byteSize: fileEntry.size,
       },
@@ -216,7 +193,7 @@ export async function uploadMedia(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal mengunggah media"),
+      error: toActionError(error, "Gagal mengunggah media"),
     };
   }
 }

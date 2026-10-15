@@ -6,6 +6,7 @@ import {
   assertCanAccessMedia,
   requireSession,
 } from "@/server/policies/access";
+import { mediaIdSchema } from "@/server/validations/media";
 
 const SIGNED_TTL_SECONDS = 120;
 
@@ -21,7 +22,15 @@ export async function GET(
 ) {
   try {
     const user = await requireSession();
-    const { id } = await context.params;
+    const { id: rawId } = await context.params;
+    const parsed = mediaIdSchema.safeParse({ id: rawId });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "ID media tidak valid" },
+        { status: 400 },
+      );
+    }
+    const { id } = parsed.data;
 
     await assertCanAccessMedia(user, id);
 
@@ -40,11 +49,7 @@ export async function GET(
 
     if (error || !data?.signedUrl) {
       return NextResponse.json(
-        {
-          error: error?.message
-            ? `Gagal membuat URL media: ${error.message}`
-            : "Gagal membuat URL media",
-        },
+        { error: "Gagal membuat URL media" },
         { status: 500 },
       );
     }
@@ -61,10 +66,6 @@ export async function GET(
         { status: error.status },
       );
     }
-    const message =
-      error instanceof Error && error.message
-        ? error.message
-        : "Gagal memuat media";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Gagal memuat media" }, { status: 500 });
   }
 }

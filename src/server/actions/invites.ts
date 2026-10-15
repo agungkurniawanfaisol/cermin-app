@@ -1,19 +1,32 @@
 "use server";
 
 import { createHash } from "node:crypto";
-import { UserRole, UserStatus } from "@prisma/client";
+import { UserRole, UserStatus, type Prisma } from "@prisma/client";
 import { hashPassword } from "better-auth/crypto";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
+import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
-import { AuthzError, requireRole } from "@/server/policies/access";
+import {
+  paginationMeta,
+  parseListQuery,
+  toListResult,
+  type ListQueryInput,
+  type ListResult,
+} from "@/lib/list-query";
+import { checkRateLimit, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
+import { getRequestIp } from "@/lib/request-ip";
+import { z } from "zod";
+import { requireRole } from "@/server/policies/access";
 import {
   acceptInviteSchema,
   createInviteSchema,
   type AcceptInviteInput,
   type CreateInviteInput,
 } from "@/server/validations/invite";
+
+const disableUserIdSchema = z.string().uuid("ID pengguna tidak valid");
 
 export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
@@ -23,17 +36,21 @@ function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
-function toErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof AuthzError) return error.message;
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
-
 export async function createInvite(
   input: CreateInviteInput,
 ): Promise<ActionResult<{ inviteUrl: string; inviteId: string }>> {
   try {
     const admin = await requireRole("ADMIN");
+    const ip = await getRequestIp();
+    const inviteLimit = checkRateLimit(
+      `invite:create:${admin.id}:${ip}`,
+      15,
+      60 * 60 * 1000,
+    );
+    if (!inviteLimit.ok) {
+      return { ok: false, error: RATE_LIMIT_MESSAGE };
+    }
+
     const parsed = createInviteSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -79,7 +96,7 @@ export async function createInvite(
       },
     };
   } catch (error) {
-    return { ok: false, error: toErrorMessage(error, "Gagal membuat undangan") };
+    return { ok: false, error: toActionError(error, "Gagal membuat undangan") };
   }
 }
 
@@ -87,6 +104,16 @@ export async function acceptInvite(
   input: AcceptInviteInput,
 ): Promise<ActionResult<{ userId: string }>> {
   try {
+    const ip = await getRequestIp();
+    const acceptLimit = checkRateLimit(
+      `invite:accept:${ip}`,
+      10,
+      60 * 60 * 1000,
+    );
+    if (!acceptLimit.ok) {
+      return { ok: false, error: RATE_LIMIT_MESSAGE };
+    }
+
     const parsed = acceptInviteSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -161,7 +188,7 @@ export async function acceptInvite(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal menerima undangan"),
+      error: toActionError(error, "Gagal menerima undangan"),
     };
   }
 }
@@ -175,9 +202,55 @@ export type ListedUser = {
   createdAt: Date;
 };
 
-export async function listUsers(): Promise<ListedUser[]> {
+export async function listUsers(
+  raw: ListQueryInput = {},
+): Promise<ListResult<ListedUser>> {
   await requireRole("ADMIN");
-  return prisma.user.findMany({
+  const parsed = parseListQuery(raw, {
+    allowedSort: ["name", "email", "createdAt"],
+    defaultSort: "createdAt",
+    defaultOrder: "desc",
+    filters: {
+      role: ["ADMIN", "TERAPIS", "ORANG_TUA", "ALL"],
+      status: ["ACTIVE", "DISABLED", "ALL"],
+    },
+  });
+
+  const and: Prisma.UserWhereInput[] = [];
+  if (parsed.filters.role && parsed.filters.role !== "ALL") {
+    and.push({ role: parsed.filters.role as UserRole });
+  }
+  if (parsed.filters.status && parsed.filters.status !== "ALL") {
+    and.push({ status: parsed.filters.status as UserStatus });
+  }
+  if (parsed.q) {
+    and.push({
+      OR: [
+        { name: { contains: parsed.q, mode: "insensitive" } },
+        { email: { contains: parsed.q, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  const where: Prisma.UserWhereInput =
+    and.length === 0 ? {} : { AND: and };
+
+  const orderBy: Prisma.UserOrderByWithRelationInput =
+    parsed.sort === "name"
+      ? { name: parsed.order }
+      : parsed.sort === "email"
+        ? { email: parsed.order }
+        : { createdAt: parsed.order };
+
+  const total = await prisma.user.count({ where });
+  const meta = paginationMeta({
+    page: parsed.page,
+    pageSize: parsed.pageSize,
+    total,
+  });
+
+  const items = await prisma.user.findMany({
+    where,
     select: {
       id: true,
       name: true,
@@ -186,8 +259,12 @@ export async function listUsers(): Promise<ListedUser[]> {
       status: true,
       createdAt: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy,
+    skip: meta.skip,
+    take: meta.take,
   });
+
+  return toListResult(items, meta);
 }
 
 export async function disableUser(
@@ -195,11 +272,20 @@ export async function disableUser(
 ): Promise<ActionResult<{ userId: string }>> {
   try {
     const admin = await requireRole("ADMIN");
-    if (admin.id === userId) {
+    const parsedId = disableUserIdSchema.safeParse(userId);
+    if (!parsedId.success) {
+      return {
+        ok: false,
+        error: parsedId.error.issues[0]?.message ?? "ID pengguna tidak valid",
+      };
+    }
+    const id = parsedId.data;
+
+    if (admin.id === id) {
       return { ok: false, error: "Tidak dapat menonaktifkan akun sendiri" };
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
       return { ok: false, error: "Pengguna tidak ditemukan" };
     }
@@ -208,7 +294,7 @@ export async function disableUser(
     }
 
     await prisma.user.update({
-      where: { id: userId },
+      where: { id },
       data: { status: UserStatus.DISABLED },
     });
 
@@ -216,16 +302,16 @@ export async function disableUser(
       actorId: admin.id,
       action: "user.disable",
       entityType: "User",
-      entityId: userId,
+      entityId: id,
       metadata: { email: user.email, role: user.role },
     });
 
     revalidatePath("/dashboard/pengguna");
-    return { ok: true, data: { userId } };
+    return { ok: true, data: { userId: id } };
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal menonaktifkan pengguna"),
+      error: toActionError(error, "Gagal menonaktifkan pengguna"),
     };
   }
 }

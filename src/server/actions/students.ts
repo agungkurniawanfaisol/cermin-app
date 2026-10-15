@@ -1,9 +1,23 @@
 "use server";
 
-import { StudentStatus, type Student } from "@prisma/client";
+import {
+  StudentStatus,
+  UserRole,
+  UserStatus,
+  type Prisma,
+  type Student,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import {
+  paginationMeta,
+  parseListQuery,
+  toListResult,
+  type ListQueryInput,
+  type ListResult,
+} from "@/lib/list-query";
 import {
   AuthzError,
   assertCanAccessStudent,
@@ -11,9 +25,11 @@ import {
   requireSession,
 } from "@/server/policies/access";
 import {
+  archiveStudentSchema,
   createStudentSchema,
   studentIdSchema,
   updateStudentSchema,
+  type ArchiveStudentInput,
   type CreateStudentInput,
   type UpdateStudentInput,
 } from "@/server/validations/student";
@@ -21,12 +37,6 @@ import {
 export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
 export type ActionResult<T> = ActionOk<T> | ActionErr;
-
-function toErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof AuthzError) return error.message;
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
 
 function parseOptionalDob(value: string | undefined): Date | null | undefined {
   if (value === undefined) return undefined;
@@ -41,68 +51,119 @@ function parseOptionalDob(value: string | undefined): Date | null | undefined {
 export type ListedStudent = {
   id: string;
   displayName: string;
+  fullName: string | null;
+  phone: string | null;
   dateOfBirth: Date | null;
   status: StudentStatus;
+  archivedReason: string | null;
+  archivedAt: Date | null;
   createdAt: Date;
 };
 
-export async function listStudentsForViewer(): Promise<ListedStudent[]> {
-  const user = await requireSession();
+const studentListSelect = {
+  id: true,
+  displayName: true,
+  fullName: true,
+  phone: true,
+  dateOfBirth: true,
+  status: true,
+  archivedReason: true,
+  archivedAt: true,
+  createdAt: true,
+} as const;
 
-  if (user.role === "ADMIN") {
-    return prisma.student.findMany({
-      select: {
-        id: true,
-        displayName: true,
-        dateOfBirth: true,
-        status: true,
-        createdAt: true,
-      },
-      orderBy: { displayName: "asc" },
-    });
-  }
+export async function listStudentsForViewer(
+  raw: ListQueryInput = {},
+): Promise<ListResult<ListedStudent>> {
+  const user = await requireSession();
+  const parsed = parseListQuery(raw, {
+    allowedSort: ["name", "createdAt"],
+    defaultSort: "name",
+    defaultOrder: "asc",
+    filters: { status: ["ACTIVE", "ARCHIVED", "ALL"] },
+  });
+
+  const statusFilter = parsed.filters.status;
+  const and: Prisma.StudentWhereInput[] = [];
 
   if (user.role === "TERAPIS") {
-    return prisma.student.findMany({
-      where: {
-        status: StudentStatus.ACTIVE,
-        therapistAssignments: {
-          some: { therapistId: user.id, endedAt: null },
-        },
+    and.push({
+      therapistAssignments: {
+        some: { therapistId: user.id, endedAt: null },
       },
-      select: {
-        id: true,
-        displayName: true,
-        dateOfBirth: true,
-        status: true,
-        createdAt: true,
-      },
-      orderBy: { displayName: "asc" },
     });
-  }
-
-  // ORANG_TUA
-  return prisma.student.findMany({
-    where: {
-      status: StudentStatus.ACTIVE,
+  } else if (user.role === "ORANG_TUA") {
+    and.push({
       parentLinks: {
         some: { parentId: user.id, isActive: true },
       },
-    },
-    select: {
-      id: true,
-      displayName: true,
-      dateOfBirth: true,
-      status: true,
-      createdAt: true,
-    },
-    orderBy: { displayName: "asc" },
+    });
+  }
+
+  if (statusFilter === "ACTIVE" || statusFilter === "ARCHIVED") {
+    and.push({ status: statusFilter });
+  } else if (user.role !== "ADMIN") {
+    // Non-admin default: active only unless explicitly filtered.
+    and.push({ status: StudentStatus.ACTIVE });
+  }
+
+  if (parsed.q) {
+    and.push({
+      OR: [
+        { displayName: { contains: parsed.q, mode: "insensitive" } },
+        { fullName: { contains: parsed.q, mode: "insensitive" } },
+        { phone: { contains: parsed.q, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  const where: Prisma.StudentWhereInput =
+    and.length === 0 ? {} : { AND: and };
+
+  const orderBy: Prisma.StudentOrderByWithRelationInput =
+    parsed.sort === "createdAt"
+      ? { createdAt: parsed.order }
+      : { displayName: parsed.order };
+
+  const total = await prisma.student.count({ where });
+  const meta = paginationMeta({
+    page: parsed.page,
+    pageSize: parsed.pageSize,
+    total,
   });
+
+  const items = await prisma.student.findMany({
+    where,
+    select: studentListSelect,
+    orderBy,
+    skip: meta.skip,
+    take: meta.take,
+  });
+
+  return toListResult(items, meta);
 }
 
-export type StudentDetail = Omit<Student, "adminNotes"> & {
+/** Compact active list for session start dropdown (capped). */
+export async function listActiveStudentsForSession(): Promise<
+  Array<{ id: string; displayName: string }>
+> {
+  const result = await listStudentsForViewer({
+    status: "ACTIVE",
+    pageSize: "50",
+    sort: "name",
+    order: "asc",
+  });
+  return result.items.map((s) => ({
+    id: s.id,
+    displayName: s.displayName,
+  }));
+}
+
+export type StudentDetail = Omit<Student, "adminNotes" | "allergies"> & {
   /** Only present when viewer role is ADMIN. */
   adminNotes?: string | null;
+  /** Only present when viewer role is ADMIN. */
+  allergies?: string | null;
   therapistAssignments: Array<{
     id: string;
     therapistId: string;
@@ -159,8 +220,9 @@ export async function getStudentDetail(
 
   if (user.role === "ADMIN") return student;
 
-  const { adminNotes, ...safe } = student;
+  const { adminNotes, allergies, ...safe } = student;
   void adminNotes;
+  void allergies;
   return safe;
 }
 
@@ -177,15 +239,73 @@ export async function createStudent(
       };
     }
 
-    const { displayName, dateOfBirth, adminNotes } = parsed.data;
+    const {
+      displayName,
+      fullName,
+      dateOfBirth,
+      homeAddress,
+      rt,
+      rw,
+      phone,
+      emergencyContactName,
+      emergencyContactPhone,
+      homeLanguage,
+      preferQuiet,
+      preferDimLight,
+      sensoryNotes,
+      allergies,
+      requirePhotoForSession,
+      adminNotes,
+      parentId,
+      relationLabel,
+    } = parsed.data;
     const dob = parseOptionalDob(dateOfBirth);
 
-    const student = await prisma.student.create({
-      data: {
-        displayName,
-        dateOfBirth: dob ?? null,
-        adminNotes: adminNotes || null,
-      },
+    if (parentId) {
+      const parent = await prisma.user.findUnique({ where: { id: parentId } });
+      if (!parent || parent.role !== UserRole.ORANG_TUA) {
+        return { ok: false, error: "Orang tua tidak ditemukan" };
+      }
+      if (parent.status !== UserStatus.ACTIVE) {
+        return { ok: false, error: "Orang tua nonaktif" };
+      }
+    }
+
+    const { student, linkId } = await prisma.$transaction(async (tx) => {
+      const created = await tx.student.create({
+        data: {
+          displayName,
+          fullName: fullName ?? null,
+          dateOfBirth: dob ?? null,
+          homeAddress: homeAddress ?? null,
+          rt: rt ?? null,
+          rw: rw ?? null,
+          phone: phone ?? null,
+          emergencyContactName: emergencyContactName ?? null,
+          emergencyContactPhone: emergencyContactPhone ?? null,
+          homeLanguage: homeLanguage ?? null,
+          preferQuiet: preferQuiet ?? false,
+          preferDimLight: preferDimLight ?? false,
+          sensoryNotes: sensoryNotes ?? null,
+          allergies: allergies ?? null,
+          requirePhotoForSession: requirePhotoForSession ?? false,
+          adminNotes: adminNotes || null,
+        },
+      });
+
+      let createdLinkId: string | null = null;
+      if (parentId) {
+        const link = await tx.parentLink.create({
+          data: {
+            parentId,
+            studentId: created.id,
+            relationLabel: relationLabel || null,
+          },
+        });
+        createdLinkId = link.id;
+      }
+
+      return { student: created, linkId: createdLinkId };
     });
 
     await writeAudit({
@@ -193,15 +313,28 @@ export async function createStudent(
       action: "student.create",
       entityType: "Student",
       entityId: student.id,
-      metadata: { displayName },
+      metadata: {
+        displayName,
+        ...(parentId ? { parentId, relationLabel: relationLabel || null } : {}),
+      },
     });
+
+    if (parentId && linkId) {
+      await writeAudit({
+        actorId: admin.id,
+        action: "parent.link",
+        entityType: "ParentLink",
+        entityId: linkId,
+        metadata: { studentId: student.id, parentId, relationLabel },
+      });
+    }
 
     revalidatePath("/dashboard/murid");
     return { ok: true, data: { id: student.id } };
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal membuat murid"),
+      error: toActionError(error, "Gagal membuat murid"),
     };
   }
 }
@@ -219,19 +352,54 @@ export async function updateStudent(
       };
     }
 
-    const { id, displayName, dateOfBirth, adminNotes } = parsed.data;
+    const {
+      id,
+      displayName,
+      fullName,
+      dateOfBirth,
+      homeAddress,
+      rt,
+      rw,
+      phone,
+      emergencyContactName,
+      emergencyContactPhone,
+      homeLanguage,
+      preferQuiet,
+      preferDimLight,
+      sensoryNotes,
+      allergies,
+      requirePhotoForSession,
+      adminNotes,
+    } = parsed.data;
     const existing = await prisma.student.findUnique({ where: { id } });
     if (!existing) {
       return { ok: false, error: "Murid tidak ditemukan" };
     }
 
     const dob = parseOptionalDob(dateOfBirth);
+    const nullIfEmpty = (v: string | undefined) =>
+      v === undefined ? undefined : v || null;
 
     await prisma.student.update({
       where: { id },
       data: {
         displayName,
+        fullName: nullIfEmpty(fullName),
         ...(dob !== undefined ? { dateOfBirth: dob } : {}),
+        homeAddress: nullIfEmpty(homeAddress),
+        rt: nullIfEmpty(rt),
+        rw: nullIfEmpty(rw),
+        phone: nullIfEmpty(phone),
+        emergencyContactName: nullIfEmpty(emergencyContactName),
+        emergencyContactPhone: nullIfEmpty(emergencyContactPhone),
+        homeLanguage: nullIfEmpty(homeLanguage),
+        ...(preferQuiet !== undefined ? { preferQuiet } : {}),
+        ...(preferDimLight !== undefined ? { preferDimLight } : {}),
+        sensoryNotes: nullIfEmpty(sensoryNotes),
+        allergies: nullIfEmpty(allergies),
+        ...(requirePhotoForSession !== undefined
+          ? { requirePhotoForSession }
+          : {}),
         adminNotes: adminNotes === undefined ? undefined : adminNotes || null,
       },
     });
@@ -250,17 +418,21 @@ export async function updateStudent(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal memperbarui murid"),
+      error: toActionError(error, "Gagal memperbarui murid"),
     };
   }
 }
 
+/**
+ * Hapus lunak murid (status → ARCHIVED). Alasan wajib.
+ * Menutup penugasan terapis aktif. Data sesi tetap ada untuk riwayat.
+ */
 export async function archiveStudent(
-  studentId: string,
+  input: ArchiveStudentInput,
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const admin = await requireRole("ADMIN");
-    const parsed = studentIdSchema.safeParse({ studentId });
+    const parsed = archiveStudentSchema.safeParse(input);
     if (!parsed.success) {
       return {
         ok: false,
@@ -268,27 +440,46 @@ export async function archiveStudent(
       };
     }
 
+    const { studentId, reason } = parsed.data;
+
     const existing = await prisma.student.findUnique({
       where: { id: studentId },
+      select: { id: true, displayName: true, status: true },
     });
     if (!existing) {
       return { ok: false, error: "Murid tidak ditemukan" };
     }
     if (existing.status === StudentStatus.ARCHIVED) {
-      return { ok: false, error: "Murid sudah diarsipkan" };
+      return { ok: false, error: "Murid sudah dihapus (diarsipkan)" };
     }
 
-    await prisma.student.update({
-      where: { id: studentId },
-      data: { status: StudentStatus.ARCHIVED },
-    });
+    const now = new Date();
+
+    await prisma.$transaction([
+      prisma.therapistAssignment.updateMany({
+        where: { studentId, endedAt: null },
+        data: { endedAt: now },
+      }),
+      prisma.student.update({
+        where: { id: studentId },
+        data: {
+          status: StudentStatus.ARCHIVED,
+          archivedReason: reason,
+          archivedAt: now,
+          archivedById: admin.id,
+        },
+      }),
+    ]);
 
     await writeAudit({
       actorId: admin.id,
       action: "student.archive",
       entityType: "Student",
       entityId: studentId,
-      metadata: { displayName: existing.displayName },
+      metadata: {
+        displayName: existing.displayName,
+        reason,
+      },
     });
 
     revalidatePath("/dashboard/murid");
@@ -297,7 +488,7 @@ export async function archiveStudent(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal mengarsipkan murid"),
+      error: toActionError(error, "Gagal menghapus murid"),
     };
   }
 }

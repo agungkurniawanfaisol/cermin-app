@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  archiveStudentSchema,
   assignTherapistSchema,
   createStudentSchema,
   linkParentSchema,
@@ -11,7 +12,7 @@ describe("createStudentSchema", () => {
     const result = createStudentSchema.safeParse({ displayName: "" });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0]?.message).toBe("Nama murid wajib");
+      expect(result.error.issues[0]?.message).toBe("Nama panggilan wajib");
     }
   });
 
@@ -33,6 +34,23 @@ describe("createStudentSchema", () => {
     const result = createStudentSchema.safeParse({
       displayName: "Alya",
       adminNotes: "x".repeat(2001),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts optional parentId and relationLabel", () => {
+    const result = createStudentSchema.safeParse({
+      displayName: "Alya",
+      parentId: "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+      relationLabel: "Ibu",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid parentId", () => {
+    const result = createStudentSchema.safeParse({
+      displayName: "Alya",
+      parentId: "bukan-uuid",
     });
     expect(result.success).toBe(false);
   });
@@ -76,5 +94,29 @@ describe("linkParentSchema", () => {
       relationLabel: "Ibu",
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("archiveStudentSchema", () => {
+  it("requires reason min 10 chars", () => {
+    const short = archiveStudentSchema.safeParse({
+      studentId: STUDENT_ID,
+      reason: "pendek",
+    });
+    expect(short.success).toBe(false);
+
+    const ok = archiveStudentSchema.safeParse({
+      studentId: STUDENT_ID,
+      reason: "Keluarga pindah klinik lain",
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it("rejects reason over 500 chars", () => {
+    const result = archiveStudentSchema.safeParse({
+      studentId: STUDENT_ID,
+      reason: "x".repeat(501),
+    });
+    expect(result.success).toBe(false);
   });
 });

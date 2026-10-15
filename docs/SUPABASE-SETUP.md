@@ -13,13 +13,15 @@ Panduan setup di dashboard Supabase. Login aplikasi memakai **Better Auth**, buk
 
 ## Checklist singkat
 
-- [ ] Proyek Supabase dibuat (region dekat, password DB disimpan)
-- [ ] Catat `PROJECT_REF`, URI pooler **6543**, URI direct **5432**
-- [ ] Bucket Storage `cermin-media` — **Public = OFF**
-- [ ] Tidak ada Storage policy anon read/write
-- [ ] Salin URL + **service_role** ke `.env.local` (service role hanya server / Docker)
-- [ ] Jalankan migrate + seed dari root atau `docker compose exec web …`
-- [ ] Jangan pakai Supabase Auth untuk login CERMIN
+- [x] Proyek Supabase dibuat (region dekat, password DB disimpan)
+- [x] Catat `PROJECT_REF`, URI pooler **6543**, URI direct **5432**
+- [x] Bucket Storage `cermin-media` — **Public = OFF**
+- [x] Tidak ada Storage policy anon read/write
+- [x] Salin URL + **service_role** ke `.env.local` (service role hanya server / Docker)
+- [x] Jalankan migrate + seed dari root atau `docker compose exec web …`
+- [x] Jangan pakai Supabase Auth untuk login CERMIN
+
+> Status 2026-10-15: lingkungan lokal sudah terhubung; migrate + seed + bucket `cermin-media` terverifikasi.
 
 ---
 

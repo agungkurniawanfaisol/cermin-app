@@ -2,9 +2,10 @@
 
 import { UserRole, UserStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
-import { AuthzError, requireRole } from "@/server/policies/access";
+import { requireRole } from "@/server/policies/access";
 import {
   assignTherapistSchema,
   endTherapistAssignmentSchema,
@@ -19,12 +20,6 @@ import {
 export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
 export type ActionResult<T> = ActionOk<T> | ActionErr;
-
-function toErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof AuthzError) return error.message;
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
 
 export async function assignTherapist(
   input: AssignTherapistInput,
@@ -99,7 +94,7 @@ export async function assignTherapist(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal menugaskan terapis"),
+      error: toActionError(error, "Gagal menugaskan terapis"),
     };
   }
 }
@@ -150,7 +145,7 @@ export async function endTherapistAssignment(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal mengakhiri penugasan"),
+      error: toActionError(error, "Gagal mengakhiri penugasan"),
     };
   }
 }
@@ -227,7 +222,7 @@ export async function linkParent(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal menautkan orang tua"),
+      error: toActionError(error, "Gagal menautkan orang tua"),
     };
   }
 }
@@ -278,7 +273,7 @@ export async function unlinkParent(
   } catch (error) {
     return {
       ok: false,
-      error: toErrorMessage(error, "Gagal melepas tautan orang tua"),
+      error: toActionError(error, "Gagal melepas tautan orang tua"),
     };
   }
 }

@@ -62,7 +62,7 @@ export function PageImage({ image }: { image: MediaRef }) {
     <img
       src={url}
       alt={image.altText ?? "Gambar cerita"}
-      className="mx-auto max-h-[50vh] w-full max-w-2xl object-contain"
+      className="mx-auto max-h-[55vh] w-full object-contain"
     />
   );
 }

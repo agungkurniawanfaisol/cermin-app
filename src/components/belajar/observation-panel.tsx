@@ -45,7 +45,7 @@ export function ObservationPanel({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="text-base font-semibold text-[#5c6b73] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b]"
+        className="inline-flex min-h-11 items-center text-base font-semibold text-[#5c6b73] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b]"
         aria-expanded={open}
       >
         {open ? "Sembunyikan catatan terapis" : "Catatan terapis"}
@@ -80,7 +80,7 @@ export function ObservationPanel({
               <button
                 type="submit"
                 disabled={pending || note.trim().length === 0}
-                className="rounded-lg bg-[#3d7c6b] px-4 py-2 font-semibold text-white disabled:opacity-50"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#3d7c6b] px-4 font-semibold text-white disabled:opacity-50 sm:w-auto"
               >
                 {pending ? "Menyimpan…" : "Simpan"}
               </button>

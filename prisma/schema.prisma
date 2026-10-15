@@ -67,6 +67,10 @@ model User {
   sessionsLed          LearningSession[]
   observations         SessionObservation[]
 
+  // List pengguna: filter peran/status + sort
+  @@index([role, status])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([name])
   @@map("users")
 }
 
@@ -129,10 +133,40 @@ model UserPreference {
 
 model Student {
   id          String        @id @default(uuid()) @db.Uuid
+  /// Nama panggilan — dipakai di daftar & child mode.
   displayName String
+  /// Nama lengkap sesuai dokumen / identitas.
+  fullName    String?
   dateOfBirth DateTime?     @db.Date
+  homeAddress String?
+  rt          String?       @db.VarChar(10)
+  rw          String?       @db.VarChar(10)
+  /// Nomor telepon kontak (biasanya orang tua / wali).
+  phone       String?       @db.VarChar(32)
+  emergencyContactName  String?
+  emergencyContactPhone String? @db.VarChar(32)
+  /// Bahasa yang dipakai di rumah (mis. Indonesia, Sunda).
+  homeLanguage String?
+  /// Preferensi sensorik untuk panduan sesi / child mode.
+  preferQuiet    Boolean @default(false)
+  preferDimLight Boolean @default(false)
+  sensoryNotes   String?
+  /// Alergi / catatan medis singkat — hanya Admin.
+  allergies String?
+  /// Jika true, sesi tidak bisa dimulai tanpa foto profil.
+  requirePhotoForSession Boolean @default(false)
+  /// Private Storage key in bucket cermin-media (avatars/students/…). Not a public URL.
+  imageKey         String?
+  /// Foto ayah (profil keluarga) — opsional; bukan foto akun login Ortu.
+  fatherImageKey   String?
+  /// Foto ibu (profil keluarga) — opsional; bukan foto akun login Ortu.
+  motherImageKey   String?
   adminNotes  String?
   status      StudentStatus @default(ACTIVE)
+  /// Alasan arsip/hapus lunak — wajib saat status → ARCHIVED (Admin).
+  archivedReason String?
+  archivedAt     DateTime?
+  archivedById   String?   @db.Uuid
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -140,6 +174,10 @@ model Student {
   parentLinks          ParentLink[]
   learningSessions     LearningSession[]
 
+  // List murid: filter status + sort nama / tanggal dibuat
+  @@index([status, displayName])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([displayName])
   @@map("students")
 }
 
@@ -223,7 +261,10 @@ model Story {
   media              MediaAsset[]
   learningSessions   LearningSession[]
 
+  // List cerita: filter kategori+status; status+sort updated/title
   @@index([categoryId, status])
+  @@index([status, updatedAt(sort: Desc)])
+  @@index([status, title])
   @@map("stories")
 }
 
@@ -312,8 +353,11 @@ model LearningSession {
   observations SessionObservation[]
   responses    SessionEvaluationResponse[]
 
+  // Riwayat sesi: per murid / pemandu + urutan waktu
   @@index([studentId, startedAt(sort: Desc)])
+  @@index([ledByUserId, startedAt(sort: Desc)])
   @@index([storyId])
+  @@index([endedAt, startedAt(sort: Desc)])
   @@map("learning_sessions")
 }
 

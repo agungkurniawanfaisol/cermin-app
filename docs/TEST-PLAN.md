@@ -14,11 +14,13 @@ Memastikan otorisasi server-side, alur belajar dipandu, dan akses media aman seb
 
 | Layer       | Tool                  | Fokus                                           |
 | ----------- | --------------------- | ----------------------------------------------- |
-| Unit        | Vitest                | Policy helpers, Zod schemas, status transitions |
-| Integration | Vitest + test DB      | Server Actions CRUD dengan session palsu        |
-| Component   | Testing Library       | Dashboard forms, child mode controls            |
-| E2E         | Playwright            | Happy path + negative authz                     |
+| Unit        | Vitest                | Policy helpers, Zod schemas, status transitions, audit-safe, avatar |
+| Integration | Vitest (mock session) | Server Actions authz 403 + audit 0/1            |
+| Component   | Vitest + Testing Library (jsdom) | Menu akun, dropdown label, form dashboard |
+| E2E         | Playwright            | Happy path + negative authz + audit invite      |
 | A11y        | axe / Playwright a11y | Fokus, label, kontras smoke                     |
+
+**Runner:** `pnpm test` (semua unit+integration+komponen). Bukan Jest — stack proyek = Vitest.
 
 ## 3. Priority cases — Unit
 
@@ -43,6 +45,12 @@ Memastikan otorisasi server-side, alur belajar dipandu, dan akses media aman seb
 | I5  | Signed URL without access              | 403                   |
 | I6  | Start session for non-assigned student | 403                   |
 | I7  | Observation written with led_by        | row linked to session |
+| I8  | Mutasi 403 → nol `AuditLog`            | no audit row          |
+| I9  | Mutasi sukses → tepat 1 audit          | action stabil         |
+| I10 | Metadata audit tanpa secret            | strip password/token/adminNotes/note |
+| I11 | `writeAudit` selalu sanitize           | unit + integration    |
+
+Lokasi: `tests/integration/*.test.ts`, `tests/unit/audit-safe.test.ts`.
 
 ## 5. Priority cases — E2E
 
@@ -55,6 +63,7 @@ Memastikan otorisasi server-side, alur belajar dipandu, dan akses media aman seb
 | E5  | Child mode session   | open /belajar → next page → play audio click → observasi → end           |
 | E6  | No autoplay          | load page with audio → assert `HTMLMediaElement` not playing until click |
 | E7  | Ortu linked only     | ortu sees linked child only                                              |
+| E8  | Audit invite.create  | admin buat undangan → 1 baris audit, metadata tanpa token                |
 
 ## 6. A11y checks
 

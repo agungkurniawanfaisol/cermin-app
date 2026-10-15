@@ -1,11 +1,19 @@
 import path from "node:path";
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [react()],
   test: {
-    environment: "node",
-    include: ["tests/**/*.test.ts"],
+    globals: false,
     passWithNoTests: true,
+    include: ["tests/**/*.test.{ts,tsx}"],
+    setupFiles: ["./tests/setup.ts"],
+    environment: "node",
+    environmentMatchGlobs: [
+      ["tests/components/**", "jsdom"],
+      ["tests/**/*.component.test.{ts,tsx}", "jsdom"],
+    ],
     env: {
       // Pure policy unit tests import access.ts which loads prisma at module init.
       DATABASE_URL:

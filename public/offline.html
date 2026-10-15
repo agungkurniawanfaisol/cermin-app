@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#3d7c6b" />
+    <title>CERMIN — Offline</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        font-family: "Comic Sans MS", "Comic Sans", "Comic Neue", cursive, sans-serif;
+        background: #f7f4ef;
+        color: #1f2933;
+      }
+      main {
+        max-width: 24rem;
+        text-align: center;
+      }
+      h1 {
+        margin: 0 0 0.75rem;
+        font-size: 1.5rem;
+        color: #3d7c6b;
+      }
+      p {
+        margin: 0 0 1.25rem;
+        line-height: 1.55;
+        color: #5c6b73;
+      }
+      button {
+        min-height: 44px;
+        padding: 0.625rem 1.25rem;
+        border: 0;
+        border-radius: 0.625rem;
+        background: #3d7c6b;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:focus-visible {
+        outline: 2px solid #0b6e4f;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tidak ada koneksi</h1>
+      <p>
+        CERMIN membutuhkan internet untuk membuka dasbor dan sesi belajar.
+        Periksa jaringan, lalu coba lagi.
+      </p>
+      <button type="button" onclick="location.reload()">Coba lagi</button>
+    </main>
+  </body>
+</html>

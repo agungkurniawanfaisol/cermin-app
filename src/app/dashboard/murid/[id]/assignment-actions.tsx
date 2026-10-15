@@ -31,11 +31,11 @@ export function EndAssignmentButton({ assignmentId }: { assignmentId: string }) 
       <Button
         type="button"
         variant="outline"
-        size="sm"
+        className="min-h-11 w-full sm:w-auto"
         onClick={onEnd}
         disabled={pending}
       >
-        {pending ? "…" : "Akhiri"}
+        {pending ? "Memproses…" : "Akhiri"}
       </Button>
       {error ? (
         <p className="text-xs text-[var(--danger,#9b2c2c)]" role="alert">
@@ -69,11 +69,11 @@ export function UnlinkParentButton({ linkId }: { linkId: string }) {
       <Button
         type="button"
         variant="outline"
-        size="sm"
+        className="min-h-11 w-full sm:w-auto"
         onClick={onUnlink}
         disabled={pending}
       >
-        {pending ? "…" : "Lepas"}
+        {pending ? "Memproses…" : "Lepas"}
       </Button>
       {error ? (
         <p className="text-xs text-[var(--danger,#9b2c2c)]" role="alert">

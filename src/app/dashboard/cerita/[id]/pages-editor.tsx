@@ -107,7 +107,7 @@ export function PagesEditor({
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-[var(--border,#d9e2ec)] bg-white p-6">
+    <div className="space-y-4 rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-[var(--text,#1f2933)]">
           Halaman
@@ -115,7 +115,7 @@ export function PagesEditor({
         {!readOnly ? (
           <Button
             type="button"
-            size="sm"
+            className="min-h-11 w-full sm:w-auto"
             onClick={onAddPage}
             disabled={pending}
           >
@@ -144,8 +144,8 @@ export function PagesEditor({
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
-                    size="sm"
                     variant="outline"
+                    className="min-h-11 min-w-11"
                     disabled={pending || index === 0}
                     onClick={() => movePage(index, -1)}
                   >
@@ -153,8 +153,8 @@ export function PagesEditor({
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
                     variant="outline"
+                    className="min-h-11 min-w-11"
                     disabled={pending || index === pages.length - 1}
                     onClick={() => movePage(index, 1)}
                   >
@@ -162,8 +162,8 @@ export function PagesEditor({
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
                     variant="outline"
+                    className="min-h-11"
                     disabled={pending}
                     onClick={() => onDeletePage(page.id)}
                   >
@@ -191,7 +191,7 @@ export function PagesEditor({
             {!readOnly ? (
               <Button
                 type="button"
-                size="sm"
+                className="min-h-11 w-full sm:w-auto"
                 disabled={pending}
                 onClick={() => onSavePage(page.id)}
               >
