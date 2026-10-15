@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build
+.next/
+out/
+dist/
+build/
+
+# env
+.env
+.env*.local
+
+# debug / ide
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+*.pem
+.vscode/
+.idea/
+
+# test / coverage
+coverage/
+playwright-report/
+test-results/
+
+# superpowers brainstorm sessions
+.superpowers/
+
+# typescript
+next-env.d.ts
+*.tsbuildinfo
+
+# git worktrees
+.worktrees/
