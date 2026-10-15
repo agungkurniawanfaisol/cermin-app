@@ -57,3 +57,6 @@ next-env.d.ts
 
 # Cursor IDE
 .cursor/
+
+# Local secrets / notes (jangan push)
+DataPenting.md
