@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserRole, UserStatus } from "@prisma/client";
@@ -6,7 +5,6 @@ import { prisma } from "@/lib/db";
 import { AuthzError, requireRole } from "@/server/policies/access";
 import { CreateStudentForm } from "../create-student-form";
 
-export const instant = false;
 
 async function TambahMuridContent() {
   try {
@@ -54,16 +52,8 @@ async function TambahMuridContent() {
   );
 }
 
-export default function TambahMuridPage() {
+export default async function TambahMuridPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat formulir…</p>
-        </main>
-      }
-    >
-      <TambahMuridContent />
-    </Suspense>
+    <TambahMuridContent />
   );
 }

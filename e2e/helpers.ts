@@ -171,7 +171,7 @@ export async function ensureIsolationFixture(): Promise<{
 export async function ensureChildModeFixture(): Promise<{
   therapist: { id: string; email: string; password: string };
   student: { id: string; displayName: string };
-  story: { id: string; title: string };
+  story: { id: string; title: string; categoryId: string };
 }> {
   const prisma = getPrisma();
   const password = "e2e-password-strong";
@@ -300,7 +300,7 @@ export async function ensureChildModeFixture(): Promise<{
   return {
     therapist: { ...therapist, password },
     student: { id: student.id, displayName },
-    story: { id: story.id, title },
+    story: { id: story.id, title, categoryId: story.categoryId },
   };
 }
 

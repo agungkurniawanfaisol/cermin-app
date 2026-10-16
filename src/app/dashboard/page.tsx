@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -13,7 +12,6 @@ import { SummaryStat } from "@/components/dashboard/summary-stat";
 import { formatDateId, formatDateTimeId } from "@/lib/format-date";
 import { getDashboardSummary } from "@/server/queries/dashboard";
 
-export const instant = false;
 
 function studentStatLabel(role: string): string {
   if (role === "ADMIN") return "Murid aktif";
@@ -21,15 +19,7 @@ function studentStatLabel(role: string): string {
   return "Anak terhubung";
 }
 
-function DashboardFallback() {
-  return (
-    <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-      <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat dasbor…</p>
-    </main>
-  );
-}
-
-async function DashboardHome() {
+export default async function DashboardPage() {
   const summary = await getDashboardSummary();
   const { user } = summary;
   const isAdmin = user.role === "ADMIN";
@@ -171,7 +161,7 @@ async function DashboardHome() {
           ) : (
             <ul className="mt-4 divide-y divide-[var(--cermin-border,#d9e2ec)] overflow-hidden rounded-2xl border border-[var(--cermin-border,#d9e2ec)] bg-white">
               {summary.recentSessions.map((session) => (
-                <li key={session.id} className="px-4 py-3">
+                <li key={session.id} className="cermin-hover-row px-4 py-3">
                   <p className="font-medium text-[var(--text,#1f2933)]">
                     {session.storyTitle}
                   </p>
@@ -188,13 +178,5 @@ async function DashboardHome() {
         </section>
       </div>
     </main>
-  );
-}
-
-export default function DashboardPage() {
-  return (
-    <Suspense fallback={<DashboardFallback />}>
-      <DashboardHome />
-    </Suspense>
   );
 }

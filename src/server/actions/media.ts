@@ -2,17 +2,20 @@
 
 import { MediaKind, type MediaAsset } from "@prisma/client";
 import { randomUUID } from "node:crypto";
-import { revalidatePath } from "next/cache";
 import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
+  assertCanAccessStudent,
   assertCanEditStoryContent,
+  AuthzError,
   requireRole,
 } from "@/server/policies/access";
-import { uploadMediaMetaSchema } from "@/server/validations/media";
-
+import {
+  mediaIdSchema,
+  uploadMediaMetaSchema,
+} from "@/server/validations/media";
 export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
 export type ActionResult<T> = ActionOk<T> | ActionErr;
@@ -45,7 +48,16 @@ function formString(value: FormDataEntryValue | null): string | undefined {
  */
 export async function uploadMedia(
   formData: FormData,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<
+  ActionResult<{
+    id: string;
+    kind: string;
+    mimeType: string;
+    altText: string | null;
+    sortOrder: number;
+    studentId: string | null;
+  }>
+> {
   try {
     const user = await requireRole("ADMIN", "TERAPIS");
 
@@ -58,6 +70,7 @@ export async function uploadMedia(
       kind: formString(formData.get("kind")),
       pageId: formString(formData.get("pageId")),
       storyId: formString(formData.get("storyId")),
+      studentId: formString(formData.get("studentId")),
       altText: formString(formData.get("altText")),
     });
     if (!meta.success) {
@@ -67,8 +80,16 @@ export async function uploadMedia(
       };
     }
 
-    const { kind, pageId, storyId: storyIdInput, altText = "" } = meta.data;
+    const {
+      kind,
+      pageId,
+      storyId: storyIdInput,
+      studentId: studentIdInput,
+      altText = "",
+    } = meta.data;
     const mediaKind = kind === "IMAGE" ? MediaKind.IMAGE : MediaKind.AUDIO;
+    const studentId =
+      mediaKind === MediaKind.IMAGE ? (studentIdInput ?? null) : null;
 
     const mimeType = fileEntry.type;
     if (mediaKind === MediaKind.IMAGE && !IMAGE_MIMES.has(mimeType)) {
@@ -123,13 +144,26 @@ export async function uploadMedia(
       storyId = story.id;
     }
 
+    if (studentId) {
+      try {
+        await assertCanAccessStudent(user, studentId);
+      } catch (error) {
+        if (error instanceof AuthzError) {
+          return { ok: false, error: "Murid tidak dapat diakses" };
+        }
+        throw error;
+      }
+    }
+
     const ext = MIME_EXT[mimeType];
     if (!ext) {
       return { ok: false, error: "Tipe file tidak didukung" };
     }
 
     const storageKey = resolvedPageId
-      ? `stories/${storyId}/pages/${resolvedPageId}/${randomUUID()}.${ext}`
+      ? studentId
+        ? `stories/${storyId}/pages/${resolvedPageId}/students/${studentId}/${randomUUID()}.${ext}`
+        : `stories/${storyId}/pages/${resolvedPageId}/${randomUUID()}.${ext}`
       : `stories/${storyId}/${randomUUID()}.${ext}`;
 
     const buffer = Buffer.from(await fileEntry.arrayBuffer());
@@ -159,6 +193,7 @@ export async function uploadMedia(
         data: {
           storyId,
           pageId: resolvedPageId,
+          studentId,
           kind: mediaKind,
           storageBucket: BUCKET,
           storageKey,
@@ -171,6 +206,14 @@ export async function uploadMedia(
       });
     } catch (dbError) {
       await supabase.storage.from(BUCKET).remove([storageKey]);
+      // Unique personalized image conflict
+      const msg = dbError instanceof Error ? dbError.message : "";
+      if (msg.includes("media_assets_page_student_image_unique")) {
+        return {
+          ok: false,
+          error: "Gambar untuk murid ini sudah ada di halaman. Hapus dulu atau pilih murid lain.",
+        };
+      }
       throw dbError;
     }
 
@@ -182,18 +225,99 @@ export async function uploadMedia(
       metadata: {
         storyId,
         pageId: resolvedPageId,
+        studentId,
         kind: mediaKind,
         mimeType,
         byteSize: fileEntry.size,
       },
     });
 
-    revalidatePath(`/dashboard/cerita/${storyId}`);
-    return { ok: true, data: { id: asset.id } };
+    // Tanpa revalidate detail — PagesEditor update lokal agar item halaman
+    // tidak hilang saat soft-refresh RSC.
+    return {
+      ok: true,
+      data: {
+        id: asset.id,
+        kind: asset.kind,
+        mimeType: asset.mimeType,
+        altText: asset.altText,
+        sortOrder: asset.sortOrder,
+        studentId: asset.studentId,
+      },
+    };
   } catch (error) {
     return {
       ok: false,
       error: toActionError(error, "Gagal mengunggah media"),
+    };
+  }
+}
+
+/**
+ * Delete media asset from Supabase Storage and database.
+ * Requires story edit permissions (Admin or author Therapist).
+ */
+export async function deleteMedia(
+  mediaId: string,
+): Promise<ActionResult<{ success: true }>> {
+  try {
+    const user = await requireRole("ADMIN", "TERAPIS");
+    const parsed = mediaIdSchema.safeParse({ id: mediaId });
+    if (!parsed.success) {
+      return { ok: false, error: "ID media tidak valid" };
+    }
+
+    const media = await prisma.mediaAsset.findUnique({
+      where: { id: parsed.data.id },
+      include: {
+        story: true,
+        page: { include: { story: true } },
+      },
+    });
+
+    if (!media) {
+      return { ok: false, error: "Media tidak ditemukan" };
+    }
+
+    const story = media.story ?? media.page?.story ?? null;
+    if (!story) {
+      return { ok: false, error: "Cerita tidak ditemukan" };
+    }
+
+    assertCanEditStoryContent(user, story);
+
+    const supabase = getSupabaseAdmin();
+    const { error: removeError } = await supabase.storage
+      .from(media.storageBucket || BUCKET)
+      .remove([media.storageKey]);
+
+    if (removeError) {
+      console.error("[deleteMedia] storage remove error:", removeError);
+    }
+
+    await prisma.mediaAsset.delete({
+      where: { id: media.id },
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "media.delete",
+      entityType: "MediaAsset",
+      entityId: media.id,
+      metadata: {
+        storyId: story.id,
+        pageId: media.pageId,
+        studentId: media.studentId,
+        kind: media.kind,
+        storageKey: media.storageKey,
+      },
+    });
+
+    return { ok: true, data: { success: true } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toActionError(error, "Gagal menghapus media"),
     };
   }
 }

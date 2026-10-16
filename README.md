@@ -16,7 +16,7 @@ cp .env.example .env.local
 docker compose up --build
 ```
 
-Buka [http://localhost:3000](http://localhost:3000).
+Buka [http://localhost:5173](http://localhost:5173).
 
 Ubah file di editor → reload otomatis di browser. Detail: [docs/DOCKER.md](docs/DOCKER.md).
 

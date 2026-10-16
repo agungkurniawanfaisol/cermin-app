@@ -23,10 +23,11 @@ export const auth = betterAuth({
     },
   },
   session: {
-    // Skip DB round-trip on getSession for a short window (Supabase ~200ms+/query).
+    // Skip DB round-trip on getSession (Supabase ~200ms+/query).
+    // 5 menit: navigasi dashboard lebih jarang hit session table.
     cookieCache: {
       enabled: true,
-      maxAge: 60,
+      maxAge: 5 * 60,
     },
   },
   // Prisma models use @db.Uuid; default nanoid ids would fail inserts.

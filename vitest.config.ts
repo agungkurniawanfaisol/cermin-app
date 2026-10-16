@@ -10,6 +10,7 @@ export default defineConfig({
     include: ["tests/**/*.test.{ts,tsx}"],
     setupFiles: ["./tests/setup.ts"],
     environment: "node",
+    // @ts-expect-error - vitest InlineConfig compatibility
     environmentMatchGlobs: [
       ["tests/components/**", "jsdom"],
       ["tests/**/*.component.test.{ts,tsx}", "jsdom"],

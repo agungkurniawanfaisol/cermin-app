@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Eye, EyeOff, HeartHandshake, Shield, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,6 @@ const AUDIENCES = [
 ] as const;
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -35,8 +33,8 @@ export default function LoginPage() {
         setPending(false);
         return;
       }
-      router.replace("/dashboard");
-      router.refresh();
+      // Hard nav — cegah soft-nav meninggalkan tree login di samping dasbor.
+      window.location.assign("/dashboard");
     } catch {
       setError("Email atau kata sandi salah");
       setPending(false);

@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ListFilters } from "@/components/dashboard/list-filters";
@@ -8,7 +7,6 @@ import type { ListQueryInput } from "@/lib/list-query";
 import { AuthzError, requireRole } from "@/server/policies/access";
 import { listUsers } from "@/server/actions/invites";
 
-export const instant = false;
 
 function toInput(
   sp: Record<string, string | string[] | undefined>,
@@ -118,20 +116,10 @@ async function PenggunaContent({
   );
 }
 
-export default function PenggunaPage({
+export default async function PenggunaPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  return (
-    <Suspense
-      fallback={
-        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat pengguna…</p>
-        </main>
-      }
-    >
-      <PenggunaContent searchParams={searchParams} />
-    </Suspense>
-  );
+  return <PenggunaContent searchParams={searchParams} />;
 }

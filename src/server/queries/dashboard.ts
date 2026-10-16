@@ -1,5 +1,4 @@
 import { StudentStatus, StoryStatus } from "@prisma/client";
-import { connection } from "next/server";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { requireSession } from "@/server/policies/access";
@@ -77,8 +76,7 @@ function tipForRole(role: SessionUser["role"]): string {
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   const user = await requireSession();
-  // After connection() inside requireSession — wall clock is request-safe.
-  await connection();
+  // connection() already awaited inside requireSession — Date is request-safe.
   const since = new Date();
   since.setDate(since.getDate() - 7);
 

@@ -1,10 +1,13 @@
-import { Suspense } from "react";
 import Link from "next/link";
+import { StoryStatus } from "@prisma/client";
 import { ListFilters } from "@/components/dashboard/list-filters";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { StoryList } from "@/components/dashboard/story-list";
 import type { ListQueryInput } from "@/lib/list-query";
-import { requireSession } from "@/server/policies/access";
+import {
+  canEditStoryContent,
+  requireSession,
+} from "@/server/policies/access";
 import {
   listCategoriesForFilter,
   listStoriesForViewer,
@@ -52,8 +55,8 @@ async function CeritaContent({
           </h1>
           <p className="mt-2 text-sm text-[var(--cermin-muted,#5c6b73)]">
             {user.role === "ORANG_TUA"
-              ? "Cerita yang sudah diterbitkan."
-              : "Kelola cerita sosial berdasarkan kategori dan alur status."}
+              ? "Cerita yang sudah diterbitkan. Buka detail untuk pratinjau singkat."
+              : "Kelola cerita sosial. Buka Detail untuk ringkasan dan pratinjau halaman, atau lanjutkan ke editor."}
           </p>
         </div>
         {canManage ? (
@@ -112,7 +115,23 @@ async function CeritaContent({
         <h2 className="text-lg font-semibold text-[var(--text,#1f2933)]">
           Daftar cerita
         </h2>
-        <StoryList stories={result.items} canManage={canManage} />
+        <StoryList
+          stories={result.items.map((story) => {
+            const editable = canEditStoryContent(user, {
+              status: story.status,
+              createdById: story.createdBy.id,
+            });
+            const continuePrimary = editable;
+            const continueLabel =
+              editable && story.status === StoryStatus.DRAFT
+                ? "Lanjutkan draf"
+                : editable
+                  ? "Lanjutkan"
+                  : "Lihat cerita";
+            return { ...story, continueLabel, continuePrimary };
+          })}
+          canManage={canManage}
+        />
         <ListPagination
           page={result.page}
           totalPages={result.totalPages}
@@ -126,20 +145,10 @@ async function CeritaContent({
   );
 }
 
-export default function CeritaPage({
+export default async function CeritaPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  return (
-    <Suspense
-      fallback={
-        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat cerita…</p>
-        </main>
-      }
-    >
-      <CeritaContent searchParams={searchParams} />
-    </Suspense>
-  );
+  return <CeritaContent searchParams={searchParams} />;
 }

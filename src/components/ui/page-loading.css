@@ -1,0 +1,222 @@
+/* Imported by page-loading.tsx — harus ikut chunk komponen. */
+
+@keyframes cermin-pl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.65rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cermin-pl-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0) scale(0.85);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-0.35rem) scale(1.15);
+  }
+}
+
+@keyframes cermin-pl-bar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+@keyframes cermin-pl-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes cermin-pl-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@keyframes cermin-pl-page {
+  0%,
+  100% {
+    transform: rotateY(0deg);
+  }
+  45% {
+    transform: rotateY(-14deg);
+  }
+  55% {
+    transform: rotateY(-14deg);
+  }
+}
+
+.cermin-pl-root {
+  animation: cermin-pl-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cermin-pl-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cermin-pl-dot {
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--cermin-accent, #3d7c6b);
+  animation: cermin-pl-dot 1.15s ease-in-out infinite;
+}
+
+.cermin-pl-dot:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.cermin-pl-dot:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+.cermin-pl-bar {
+  height: 0.3rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--accent-soft, #e6f2ee);
+}
+
+.cermin-pl-bar-fill {
+  display: block;
+  height: 100%;
+  width: 38%;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--cermin-accent, #3d7c6b) 80%, white);
+  animation: cermin-pl-bar 1.35s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.cermin-pl-shimmer {
+  border: 1px solid var(--cermin-border, #d9e2ec);
+  border-radius: 0.75rem;
+  background-color: var(--surface, #ffffff);
+  background-image: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 40%,
+    var(--accent-soft, #e6f2ee) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: cermin-pl-shimmer 1.7s ease-in-out infinite;
+}
+
+.cermin-pl-shimmer-muted {
+  border: none;
+  border-radius: 0.5rem;
+  background-color: var(--cermin-border, #d9e2ec);
+  background-image: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 40%,
+    var(--accent-soft, #e6f2ee) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: cermin-pl-shimmer 1.7s ease-in-out infinite;
+}
+
+.cermin-pl-orb-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  flex-shrink: 0;
+}
+
+.cermin-pl-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid color-mix(in srgb, var(--cermin-accent, #3d7c6b) 40%, transparent);
+  animation: cermin-pl-ring 2.2s ease-out infinite;
+  pointer-events: none;
+}
+
+.cermin-pl-book {
+  width: 3.25rem;
+  height: 2.5rem;
+  border-radius: 0.35rem 0.55rem 0.55rem 0.35rem;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--cermin-accent, #3d7c6b) 22%, white) 0%,
+    var(--surface, #ffffff) 42%,
+    var(--accent-soft, #e6f2ee) 100%
+  );
+  border: 1px solid var(--cermin-border, #d9e2ec);
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  animation: cermin-pl-page 2.4s ease-in-out infinite;
+  box-shadow: 0 0.35rem 0.75rem color-mix(in srgb, var(--text, #1f2933) 8%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cermin-pl-root,
+  .cermin-pl-dot,
+  .cermin-pl-bar-fill,
+  .cermin-pl-shimmer,
+  .cermin-pl-shimmer-muted,
+  .cermin-pl-ring,
+  .cermin-pl-book {
+    animation: none !important;
+  }
+
+  .cermin-pl-root {
+    opacity: 1;
+    transform: none;
+  }
+
+  .cermin-pl-dot {
+    opacity: 0.65;
+  }
+
+  .cermin-pl-bar-fill {
+    width: 42%;
+    transform: none;
+  }
+
+  .cermin-pl-shimmer,
+  .cermin-pl-shimmer-muted {
+    background-image: none;
+  }
+
+  .cermin-pl-ring {
+    opacity: 0.35;
+    transform: none;
+  }
+
+  .cermin-pl-book {
+    transform: none;
+  }
+}

@@ -7,6 +7,8 @@ export const uploadMediaMetaSchema = z
     }),
     pageId: z.string().uuid("ID halaman tidak valid").optional(),
     storyId: z.string().uuid("ID cerita tidak valid").optional(),
+    /** Opsional: gambar personalisasi untuk murid tertentu. */
+    studentId: z.string().uuid("ID murid tidak valid").optional(),
     altText: z
       .string()
       .trim()
@@ -26,6 +28,20 @@ export const uploadMediaMetaSchema = z
         code: z.ZodIssueCode.custom,
         message: "Teks alternatif (altText) wajib untuk gambar",
         path: ["altText"],
+      });
+    }
+    if (data.kind === "AUDIO" && data.studentId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Audio tidak dapat dipersonalisasi per murid",
+        path: ["studentId"],
+      });
+    }
+    if (data.studentId && !data.pageId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Personalisasi gambar memerlukan pageId",
+        path: ["pageId"],
       });
     }
   });

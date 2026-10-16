@@ -8,7 +8,7 @@ const requireRole = vi.fn();
 const userFindUnique = vi.fn();
 const userUpdate = vi.fn();
 const inviteCreate = vi.fn();
-const checkRateLimit = vi.fn(() => ({ ok: true }));
+const checkRateLimit = vi.fn((..._args: unknown[]) => ({ ok: true }));
 const getRequestIp = vi.fn(async () => "127.0.0.1");
 
 vi.mock("next/cache", () => ({
@@ -20,12 +20,13 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
-  checkRateLimit: (...args: unknown[]) => checkRateLimit(...args),
+  checkRateLimit: (key: string, limit?: number, windowMs?: number) =>
+    checkRateLimit(key, limit, windowMs),
   RATE_LIMIT_MESSAGE: "Terlalu banyak percobaan. Coba lagi nanti.",
 }));
 
 vi.mock("@/lib/request-ip", () => ({
-  getRequestIp: (...args: unknown[]) => getRequestIp(...args),
+  getRequestIp: () => getRequestIp(),
 }));
 
 vi.mock("@/lib/db", () => ({

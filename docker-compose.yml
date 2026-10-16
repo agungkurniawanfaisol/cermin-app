@@ -3,7 +3,7 @@
 #
 #   cp .env.example .env.local   # isi nilai Supabase
 #   docker compose up --build
-# App: http://localhost:3000
+# App: http://localhost:5173
 
 services:
   web:
@@ -12,20 +12,20 @@ services:
       dockerfile: Dockerfile.dev
     container_name: cermin-web
     ports:
-      - "3000:3000"
+      - "5173:5173"
     env_file:
       - path: .env.local
         required: false
     environment:
       NODE_ENV: development
       HOSTNAME: 0.0.0.0
-      PORT: "3000"
+      PORT: "5173"
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
       NEXT_TELEMETRY_DISABLED: "1"
       # Prefer app URL inside browser/host
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:5173}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:5173}
     volumes:
       # Edit on host → Fast Refresh in container
       - .:/app

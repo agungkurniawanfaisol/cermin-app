@@ -17,7 +17,7 @@ export function ActionCard({
   return (
     <Link
       href={href}
-      className="group flex min-h-[7.5rem] cursor-pointer flex-col rounded-2xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4 shadow-sm transition-colors duration-200 hover:border-[var(--cermin-accent,#3d7c6b)] hover:bg-[var(--accent-soft,#e6f2ee)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2"
+      className="cermin-hover-card group flex min-h-[7.5rem] cursor-pointer flex-col rounded-2xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2"
     >
       <span className="inline-flex size-11 items-center justify-center rounded-xl bg-[var(--accent-soft,#e6f2ee)] text-[var(--cermin-accent,#3d7c6b)] transition-colors duration-200 group-hover:bg-white">
         <Icon className="size-5" aria-hidden />

@@ -1,10 +1,7 @@
-import { Suspense } from "react";
 import { requireSession } from "@/server/policies/access";
 import { listFaqsForViewer } from "@/server/actions/faqs";
 import { listGuidesForViewer } from "@/server/actions/guides";
 import { BantuanTabs } from "./bantuan-tabs";
-
-export const instant = false;
 
 async function BantuanContent({
   searchParams,
@@ -41,20 +38,10 @@ async function BantuanContent({
   );
 }
 
-export default function BantuanPage({
+export default async function BantuanPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  return (
-    <Suspense
-      fallback={
-        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat bantuan…</p>
-        </main>
-      }
-    >
-      <BantuanContent searchParams={searchParams} />
-    </Suspense>
-  );
+  return <BantuanContent searchParams={searchParams} />;
 }

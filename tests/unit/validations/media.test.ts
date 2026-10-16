@@ -43,10 +43,48 @@ describe("uploadMediaMetaSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts story-level IMAGE cover without pageId", () => {
+    const result = uploadMediaMetaSchema.safeParse({
+      kind: "IMAGE",
+      storyId: uuid,
+      altText: "Gambar utama cerita",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects personalized IMAGE without pageId", () => {
+    const result = uploadMediaMetaSchema.safeParse({
+      kind: "IMAGE",
+      storyId: uuid,
+      studentId: "22222222-2222-4222-8222-222222222222",
+      altText: "Foto Alya",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("accepts AUDIO without altText", () => {
     const result = uploadMediaMetaSchema.safeParse({
       kind: "AUDIO",
       storyId: uuid,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects studentId on AUDIO", () => {
+    const result = uploadMediaMetaSchema.safeParse({
+      kind: "AUDIO",
+      pageId: uuid,
+      studentId: "22222222-2222-4222-8222-222222222222",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts personalized IMAGE", () => {
+    const result = uploadMediaMetaSchema.safeParse({
+      kind: "IMAGE",
+      pageId: uuid,
+      studentId: "22222222-2222-4222-8222-222222222222",
+      altText: "Foto Alya",
     });
     expect(result.success).toBe(true);
   });

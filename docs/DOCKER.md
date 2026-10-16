@@ -12,7 +12,7 @@
 
 | Service | Peran                                     |
 | ------- | ----------------------------------------- |
-| `web`   | Next.js App Router, hot reload, port 3000 |
+| `web`   | Next.js App Router, hot reload, port 5173 |
 
 Postgres, Better Auth sessions, dan Storage **tidak** di-compose. Login = Better Auth. DB + Storage = Supabase (lihat [SUPABASE-SETUP.md](./SUPABASE-SETUP.md)).
 
@@ -31,7 +31,7 @@ cp .env.example .env.local
 docker compose up --build
 ```
 
-Buka [http://localhost:3000](http://localhost:3000).
+Buka [http://localhost:5173](http://localhost:5173).
 
 Stop: `Ctrl+C` atau `docker compose down`.
 

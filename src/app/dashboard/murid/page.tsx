@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { ListFilters } from "@/components/dashboard/list-filters";
 import { ListPagination } from "@/components/dashboard/list-pagination";
@@ -8,7 +7,6 @@ import { requireSession } from "@/server/policies/access";
 import { listStudentsForViewer } from "@/server/actions/students";
 import type { ListQueryInput } from "@/lib/list-query";
 
-export const instant = false;
 
 function toInput(
   sp: Record<string, string | string[] | undefined>,
@@ -119,20 +117,10 @@ async function MuridContent({
   );
 }
 
-export default function MuridPage({
+export default async function MuridPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  return (
-    <Suspense
-      fallback={
-        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat murid…</p>
-        </main>
-      }
-    >
-      <MuridContent searchParams={searchParams} />
-    </Suspense>
-  );
+  return <MuridContent searchParams={searchParams} />;
 }

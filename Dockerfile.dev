@@ -6,14 +6,14 @@ RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
 
 WORKDIR /app
 
-EXPOSE 3000
+EXPOSE 5173
 
 ENV HOSTNAME=0.0.0.0
-ENV PORT=3000
+ENV PORT=5173
 # WSL2 / Docker Desktop: reliable file watching across bind mounts
 ENV WATCHPACK_POLLING=true
 ENV CHOKIDAR_USEPOLLING=true
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install from mounted package.json, then Next.js Turbopack on 0.0.0.0
-CMD ["sh", "-c", "pnpm install && pnpm exec next dev --turbopack --hostname 0.0.0.0 --port 3000"]
+CMD ["sh", "-c", "pnpm install && pnpm exec next dev --turbopack --hostname 0.0.0.0 --port 5173"]

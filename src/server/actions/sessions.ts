@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import {
   MediaKind,
   StoryStatus,
@@ -12,6 +13,11 @@ import { revalidatePath } from "next/cache";
 import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import {
+  resolveStoryCoverMediaId,
+  storyCoverMediaWhere,
+} from "@/lib/story-cover";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   paginationMeta,
   parseListQuery,
@@ -26,12 +32,15 @@ import {
   requireSession,
   type PolicyUser,
 } from "@/server/policies/access";
+import { listActiveStudentsForSession } from "@/server/actions/students";
 import {
   addObservationSchema,
   sessionIdSchema,
   startLearningSessionSchema,
+  updateSessionStudentSchema,
   type AddObservationInput,
   type StartLearningSessionInput,
+  type UpdateSessionStudentInput,
 } from "@/server/validations/session";
 
 export type ActionOk<T> = { ok: true; data: T };
@@ -61,12 +70,19 @@ async function assertCanReadSession(
 export type PublishedStoryOption = {
   id: string;
   title: string;
+  description: string;
+  categoryId: string;
   categoryName: string;
+  categoryDescription: string | null;
+  pageCount: number;
+  /** Cover: prefer IMAGE story-level (pageId null); fallback halaman shared. */
+  coverMediaId: string | null;
 };
 
-export async function listPublishedStoriesForSession(): Promise<
+/** Deduped per RSC request. */
+export const listPublishedStoriesForSession = cache(async (): Promise<
   PublishedStoryOption[]
-> {
+> => {
   await requireSession();
 
   const stories = await prisma.story.findMany({
@@ -76,16 +92,44 @@ export async function listPublishedStoriesForSession(): Promise<
     select: {
       id: true,
       title: true,
-      category: { select: { name: true } },
+      description: true,
+      categoryId: true,
+      category: { select: { name: true, description: true } },
+      _count: { select: { pages: true } },
+      media: {
+        where: storyCoverMediaWhere,
+        orderBy: { sortOrder: "desc" },
+        take: 1,
+        select: { id: true },
+      },
+      pages: {
+        orderBy: { sortOrder: "asc" },
+        select: {
+          media: {
+            where: { kind: "IMAGE", studentId: null },
+            orderBy: { sortOrder: "asc" },
+            take: 1,
+            select: { id: true },
+          },
+        },
+      },
     },
   });
 
   return stories.map((story) => ({
     id: story.id,
     title: story.title,
+    description: story.description,
+    categoryId: story.categoryId,
     categoryName: story.category.name,
+    categoryDescription: story.category.description,
+    pageCount: story._count.pages,
+    coverMediaId: resolveStoryCoverMediaId({
+      storyLevelCoverId: story.media[0]?.id,
+      pages: story.pages,
+    }),
   }));
-}
+});
 
 export type ListedSession = {
   id: string;
@@ -164,26 +208,28 @@ export async function listLearningSessionsForViewer(
   const where: Prisma.LearningSessionWhereInput =
     and.length === 0 ? {} : { AND: and };
 
-  const total = await prisma.learningSession.count({ where });
+  const skip = (Math.max(parsed.page, 1) - 1) * parsed.pageSize;
+  const [total, items] = await Promise.all([
+    prisma.learningSession.count({ where }),
+    prisma.learningSession.findMany({
+      where,
+      select: {
+        id: true,
+        startedAt: true,
+        endedAt: true,
+        student: { select: { id: true, displayName: true } },
+        story: { select: { id: true, title: true } },
+        ledBy: { select: { id: true, name: true } },
+      },
+      orderBy: { startedAt: parsed.order },
+      skip,
+      take: parsed.pageSize,
+    }),
+  ]);
   const meta = paginationMeta({
     page: parsed.page,
     pageSize: parsed.pageSize,
     total,
-  });
-
-  const items = await prisma.learningSession.findMany({
-    where,
-    select: {
-      id: true,
-      startedAt: true,
-      endedAt: true,
-      student: { select: { id: true, displayName: true } },
-      story: { select: { id: true, title: true } },
-      ledBy: { select: { id: true, name: true } },
-    },
-    orderBy: { startedAt: parsed.order },
-    skip: meta.skip,
-    take: meta.take,
   });
 
   return toListResult(items, meta);
@@ -203,15 +249,21 @@ export async function startLearningSession(
     const user = await requireSession();
     await assertCanLeadSession(user, parsed.data.studentId);
 
-    const student = await prisma.student.findUnique({
-      where: { id: parsed.data.studentId },
-      select: {
-        id: true,
-        status: true,
-        imageKey: true,
-        requirePhotoForSession: true,
-      },
-    });
+    const [student, story] = await Promise.all([
+      prisma.student.findUnique({
+        where: { id: parsed.data.studentId },
+        select: {
+          id: true,
+          status: true,
+          imageKey: true,
+          requirePhotoForSession: true,
+        },
+      }),
+      prisma.story.findUnique({
+        where: { id: parsed.data.storyId },
+        select: { id: true, status: true },
+      }),
+    ]);
     if (!student) throw new AuthzError("Murid tidak ditemukan", 404);
     if (student.status !== StudentStatus.ACTIVE) {
       throw new AuthzError("Murid tidak aktif");
@@ -224,10 +276,6 @@ export async function startLearningSession(
       };
     }
 
-    const story = await prisma.story.findUnique({
-      where: { id: parsed.data.storyId },
-      select: { id: true, status: true },
-    });
     if (!story) throw new AuthzError("Cerita tidak ditemukan", 404);
     if (story.status !== StoryStatus.PUBLISHED) {
       throw new AuthzError("Hanya cerita terbit yang dapat dipelajari");
@@ -349,20 +397,23 @@ export async function endLearningSession(
   }
 }
 
+export type SessionMediaRef = {
+  id: string;
+  altText: string | null;
+  sortOrder: number;
+  url?: string | null;
+};
+
 export type SessionReaderPage = {
   id: string;
   sortOrder: number;
   bodyText: string;
-  images: Array<{
-    id: string;
-    altText: string | null;
-    sortOrder: number;
-  }>;
-  audios: Array<{
-    id: string;
-    altText: string | null;
-    sortOrder: number;
-  }>;
+  /** Foto murid personalisasi (MediaAsset.studentId = murid sesi). Null jika belum diunggah. */
+  portraitImage: SessionMediaRef | null;
+  /** Ilustrasi umum admin (studentId null). */
+  storyImages: SessionMediaRef[];
+  /** Audio narasi umum (studentId null). */
+  storyAudios: SessionMediaRef[];
 };
 
 export type SessionForReader = {
@@ -370,7 +421,11 @@ export type SessionForReader = {
   startedAt: Date;
   endedAt: Date | null;
   student: { id: string; displayName: string };
-  story: { id: string; title: string };
+  /** Murid yang boleh dipilih di child mode (ganti mid-session). */
+  studentOptions: Array<{ id: string; displayName: string }>;
+  story: { id: string; title: string; categoryName: string };
+  /** Cerita terbit untuk ganti cerita mid-session. */
+  availableStories: PublishedStoryOption[];
   pages: SessionReaderPage[];
   observations: Array<{
     id: string;
@@ -392,80 +447,270 @@ export async function getSessionForReader(
   if (!parsed.success) throw new AuthzError("Sesi tidak ditemukan", 404);
   const user = await requireSession();
 
-  const session = await prisma.learningSession.findUnique({
-    where: { id: parsed.data.sessionId },
-    include: {
-      student: { select: { id: true, displayName: true } },
-      story: {
-        select: {
-          id: true,
-          title: true,
-          pages: {
-            orderBy: { sortOrder: "asc" },
-            include: {
-              media: {
-                orderBy: { sortOrder: "asc" },
-                select: {
-                  id: true,
-                  kind: true,
-                  altText: true,
-                  sortOrder: true,
-                },
-              },
-            },
+  // Gelombang 1: Ambil data dasar sesi dan preferensi user secara paralel
+  const [sessionBase, preferenceRow] = await Promise.all([
+    prisma.learningSession.findUnique({
+      where: { id: parsed.data.sessionId },
+      select: {
+        id: true,
+        startedAt: true,
+        endedAt: true,
+        studentId: true,
+        storyId: true,
+        ledByUserId: true,
+        student: { select: { id: true, displayName: true } },
+        story: {
+          select: {
+            id: true,
+            title: true,
+            category: { select: { name: true } },
           },
         },
       },
-      observations: {
-        orderBy: { recordedAt: "desc" },
-        select: {
-          id: true,
-          note: true,
-          recordedAt: true,
-          recordedBy: { select: { id: true, name: true } },
-        },
-      },
-    },
-  });
+    }),
+    prisma.userPreference.findUnique({
+      where: { userId: user.id },
+      select: { textSize: true, audioEnabled: true },
+    }),
+  ]);
 
-  if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
-  await assertCanReadSession(user, session);
+  if (!sessionBase) throw new AuthzError("Sesi tidak ditemukan", 404);
+  await assertCanReadSession(user, sessionBase);
 
-  const preferenceRow = await prisma.userPreference.findUnique({
-    where: { userId: user.id },
-    select: { textSize: true, audioEnabled: true },
-  });
   const preference = preferenceRow ?? {
     textSize: "MD" as const,
     audioEnabled: true,
   };
 
+  // Gelombang 2: Ambil halaman cerita (+ media), observasi sesi, daftar murid aktif, dan daftar cerita terbit secara paralel
+  const [pages, observations, studentOptionsRaw, availableStories] =
+    await Promise.all([
+    prisma.storyPage.findMany({
+      where: { storyId: sessionBase.storyId },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        sortOrder: true,
+        bodyText: true,
+        media: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true,
+            kind: true,
+            altText: true,
+            sortOrder: true,
+            studentId: true,
+            storageKey: true,
+            storageBucket: true,
+          },
+        },
+      },
+    }),
+    prisma.sessionObservation.findMany({
+      where: { sessionId: sessionBase.id },
+      orderBy: { recordedAt: "desc" },
+      select: {
+        id: true,
+        note: true,
+        recordedAt: true,
+        recordedBy: { select: { id: true, name: true } },
+      },
+    }),
+    listActiveStudentsForSession(),
+      listPublishedStoriesForSession(),
+  ]);
+
+  const studentOptions = [...studentOptionsRaw];
+  // Pastikan murid sesi ada di opsi (mis. status berubah setelah sesi mulai).
+  if (!studentOptions.some((s) => s.id === sessionBase.student.id)) {
+    studentOptions.unshift(sessionBase.student);
+  }
+
+  // Kumpulkan media yang terpilih untuk batch pre-signing signed URLs
+  const studentId = sessionBase.student.id;
+  const mediaToSign = new Map<string, { key: string; bucket: string }>();
+
+  for (const page of pages) {
+    const imagesAll = page.media.filter((m) => m.kind === MediaKind.IMAGE);
+    const personalized = imagesAll.filter((m) => m.studentId === studentId);
+    const shared = imagesAll.filter((m) => m.studentId == null);
+    const sharedAudio = page.media.filter(
+      (m) => m.kind === MediaKind.AUDIO && m.studentId == null,
+    );
+
+    if (personalized[0]) {
+      mediaToSign.set(personalized[0].id, {
+        key: personalized[0].storageKey,
+        bucket: personalized[0].storageBucket || "cermin-media",
+      });
+    }
+    for (const img of shared) {
+      mediaToSign.set(img.id, {
+        key: img.storageKey,
+        bucket: img.storageBucket || "cermin-media",
+      });
+    }
+    for (const aud of sharedAudio) {
+      mediaToSign.set(aud.id, {
+        key: aud.storageKey,
+        bucket: aud.storageBucket || "cermin-media",
+      });
+    }
+  }
+
+  const signedUrlMap = new Map<string, string>();
+  if (mediaToSign.size > 0) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const byBucket = new Map<string, Array<{ id: string; key: string }>>();
+      for (const [id, item] of mediaToSign.entries()) {
+        const list = byBucket.get(item.bucket) ?? [];
+        list.push({ id, key: item.key });
+        byBucket.set(item.bucket, list);
+      }
+
+      await Promise.all(
+        Array.from(byBucket.entries()).map(async ([bucket, items]) => {
+          const keys = items.map((x) => x.key);
+          const { data, error } = await supabase.storage
+            .from(bucket)
+            .createSignedUrls(keys, 300);
+
+          if (!error && data) {
+            for (let i = 0; i < data.length; i++) {
+              const res = data[i];
+              const itemRef = items[i];
+              if (res?.signedUrl && itemRef) {
+                signedUrlMap.set(itemRef.id, res.signedUrl);
+              }
+            }
+          }
+        }),
+      );
+    } catch {
+      // Fallback aman: jika storage API gagal, url tetap null dan klien akan mengambil via /api/media/[id]
+    }
+  }
+
+  const toRef = (m: {
+    id: string;
+    altText: string | null;
+    sortOrder: number;
+  }): SessionMediaRef => ({
+    id: m.id,
+    altText: m.altText,
+    sortOrder: m.sortOrder,
+    url: signedUrlMap.get(m.id) ?? null,
+  });
+
   return {
-    id: session.id,
-    startedAt: session.startedAt,
-    endedAt: session.endedAt,
-    student: session.student,
-    story: { id: session.story.id, title: session.story.title },
-    pages: session.story.pages.map((page) => ({
-      id: page.id,
-      sortOrder: page.sortOrder,
-      bodyText: page.bodyText,
-      images: page.media
-        .filter((m) => m.kind === MediaKind.IMAGE)
-        .map((m) => ({
-          id: m.id,
-          altText: m.altText,
-          sortOrder: m.sortOrder,
-        })),
-      audios: page.media
-        .filter((m) => m.kind === MediaKind.AUDIO)
-        .map((m) => ({
-          id: m.id,
-          altText: m.altText,
-          sortOrder: m.sortOrder,
-        })),
-    })),
-    observations: session.observations,
+    id: sessionBase.id,
+    startedAt: sessionBase.startedAt,
+    endedAt: sessionBase.endedAt,
+    student: sessionBase.student,
+    studentOptions,
+    story: {
+      id: sessionBase.story.id,
+      title: sessionBase.story.title,
+      categoryName: sessionBase.story.category.name,
+    },
+    availableStories,
+    pages: pages.map((page) => {
+      const imagesAll = page.media.filter((m) => m.kind === MediaKind.IMAGE);
+      const personalized = imagesAll.filter((m) => m.studentId === studentId);
+      const shared = imagesAll.filter((m) => m.studentId == null);
+      const sharedAudio = page.media.filter(
+        (m) => m.kind === MediaKind.AUDIO && m.studentId == null,
+      );
+      return {
+        id: page.id,
+        sortOrder: page.sortOrder,
+        bodyText: page.bodyText,
+        portraitImage: personalized[0] ? toRef(personalized[0]) : null,
+        storyImages: shared.map(toRef),
+        storyAudios: sharedAudio.map(toRef),
+      };
+    }),
+    observations,
     preference,
   };
+}
+
+/** Ganti murid pada sesi aktif — foto personalisasi di child mode ikut berubah. */
+export async function updateSessionStudent(
+  input: UpdateSessionStudentInput,
+): Promise<ActionResult<{ sessionId: string; studentId: string }>> {
+  try {
+    const parsed = updateSessionStudentSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+    const user = await requireSession();
+
+    const session = await prisma.learningSession.findUnique({
+      where: { id: parsed.data.sessionId },
+      select: {
+        id: true,
+        ledByUserId: true,
+        studentId: true,
+        endedAt: true,
+      },
+    });
+    if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
+    assertCanManageSession(user, session);
+    if (session.endedAt) {
+      throw new AuthzError("Sesi sudah berakhir");
+    }
+
+    if (session.studentId === parsed.data.studentId) {
+      return {
+        ok: true,
+        data: { sessionId: session.id, studentId: session.studentId },
+      };
+    }
+
+    await assertCanLeadSession(user, parsed.data.studentId);
+
+    const student = await prisma.student.findFirst({
+      where: {
+        id: parsed.data.studentId,
+        status: StudentStatus.ACTIVE,
+      },
+      select: { id: true },
+    });
+    if (!student) {
+      return { ok: false, error: "Murid tidak ditemukan atau tidak aktif" };
+    }
+
+    await prisma.learningSession.update({
+      where: { id: session.id },
+      data: { studentId: parsed.data.studentId },
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "session.student.change",
+      entityType: "LearningSession",
+      entityId: session.id,
+      metadata: {
+        fromStudentId: session.studentId,
+        toStudentId: parsed.data.studentId,
+      },
+    });
+
+    revalidatePath(`/belajar/${session.id}`);
+    revalidatePath("/dashboard/sesi");
+    return {
+      ok: true,
+      data: { sessionId: session.id, studentId: parsed.data.studentId },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toActionError(error, "Gagal mengganti murid sesi"),
+    };
+  }
 }

@@ -242,26 +242,28 @@ export async function listUsers(
         ? { email: parsed.order }
         : { createdAt: parsed.order };
 
-  const total = await prisma.user.count({ where });
+  const skip = (Math.max(parsed.page, 1) - 1) * parsed.pageSize;
+  const [total, items] = await Promise.all([
+    prisma.user.count({ where }),
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        createdAt: true,
+      },
+      orderBy,
+      skip,
+      take: parsed.pageSize,
+    }),
+  ]);
   const meta = paginationMeta({
     page: parsed.page,
     pageSize: parsed.pageSize,
     total,
-  });
-
-  const items = await prisma.user.findMany({
-    where,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      status: true,
-      createdAt: true,
-    },
-    orderBy,
-    skip: meta.skip,
-    take: meta.take,
   });
 
   return toListResult(items, meta);

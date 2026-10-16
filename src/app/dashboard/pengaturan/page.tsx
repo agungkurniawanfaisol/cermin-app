@@ -1,14 +1,20 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { InstallHint } from "@/components/pwa/install-hint";
 import { APP_VERSION, appVersionLabel } from "@/lib/app-version";
-import { PreferenceForm } from "./preference-form";
+import { requireSession } from "@/server/policies/access";
 import { getMyPreference } from "@/server/actions/preferences";
-
-export const instant = false;
+import { getBrandingPublic } from "@/server/queries/branding";
+import { BrandingForm } from "./branding-form";
+import { InstitutionProfileForm } from "./institution-profile-form";
+import { PreferenceForm } from "./preference-form";
 
 async function PengaturanContent() {
-  const pref = await getMyPreference();
+  const [user, pref, branding] = await Promise.all([
+    requireSession(),
+    getMyPreference(),
+    getBrandingPublic(),
+  ]);
+  const isAdmin = user.role === "ADMIN";
 
   return (
     <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
@@ -25,7 +31,26 @@ async function PengaturanContent() {
         </p>
       </div>
 
-      <div className="mt-8 w-full max-w-2xl space-y-8">
+      <div className="mt-8 w-full space-y-8">
+        {isAdmin ? (
+          <>
+            <BrandingForm
+              hasLogo={branding.hasLogo}
+              logoVersion={branding.logoVersion}
+            />
+            <InstitutionProfileForm
+              initial={{
+                name: branding.name,
+                address: branding.address,
+                websiteUrl: branding.websiteUrl,
+                instagramUrl: branding.instagramUrl,
+                facebookUrl: branding.facebookUrl,
+                youtubeUrl: branding.youtubeUrl,
+                whatsappUrl: branding.whatsappUrl,
+              }}
+            />
+          </>
+        ) : null}
         <InstallHint />
         <PreferenceForm
           initialTextSize={pref.textSize}
@@ -54,18 +79,8 @@ async function PengaturanContent() {
   );
 }
 
-export default function PengaturanPage() {
+export default async function PengaturanPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-          <p className="text-[var(--cermin-muted,#5c6b73)]">
-            Memuat pengaturan…
-          </p>
-        </main>
-      }
-    >
-      <PengaturanContent />
-    </Suspense>
+    <PengaturanContent />
   );
 }

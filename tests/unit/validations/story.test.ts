@@ -40,14 +40,16 @@ describe("createPageSchema / updatePageSchema", () => {
   it("rejects invalid pageId on update", () => {
     const result = updatePageSchema.safeParse({
       pageId: "x",
+      title: "",
       bodyText: "teks",
     });
     expect(result.success).toBe(false);
   });
 
-  it("accepts update with body", () => {
+  it("accepts update with title and body", () => {
     const result = updatePageSchema.safeParse({
       pageId,
+      title: "Giliran main",
       bodyText: "Halaman diperbarui",
     });
     expect(result.success).toBe(true);

@@ -95,8 +95,8 @@ export const unlinkParentSchema = z.object({
   linkId: z.string().uuid("ID tautan tidak valid"),
 });
 
-export type CreateStudentInput = z.infer<typeof createStudentSchema>;
-export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
+export type CreateStudentInput = z.input<typeof createStudentSchema>;
+export type UpdateStudentInput = z.input<typeof updateStudentSchema>;
 export type ArchiveStudentInput = z.infer<typeof archiveStudentSchema>;
 export type AssignTherapistInput = z.infer<typeof assignTherapistSchema>;
 export type EndTherapistAssignmentInput = z.infer<

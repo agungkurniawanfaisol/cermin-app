@@ -112,7 +112,7 @@ describe("UserAccountMenu", () => {
 
     await waitFor(() => {
       expect(signOut).toHaveBeenCalled();
-      expect(replace).toHaveBeenCalledWith("/");
+      expect(replace).toHaveBeenCalledWith("/login");
     });
   });
 });

@@ -32,6 +32,9 @@ test.describe("child mode", () => {
 
     await page.goto("/dashboard/sesi");
     await page.locator("#sesi-murid").selectOption(fixture.student.id);
+    if (await page.locator("#sesi-kategori").isVisible()) {
+      await page.locator("#sesi-kategori").selectOption(fixture.story.categoryId);
+    }
     await page.locator("#sesi-cerita").selectOption(fixture.story.id);
     await page.getByRole("button", { name: "Mulai sesi belajar" }).click();
 
@@ -39,6 +42,7 @@ test.describe("child mode", () => {
     await expect(
       page.getByRole("heading", { name: fixture.story.title }),
     ).toBeVisible();
+    await expect(page.getByText("Bergiliran")).toBeVisible();
     await expect(page.getByText("Halaman 1 dari 2")).toBeVisible();
 
     // Audio control present; nothing should be autoplaying

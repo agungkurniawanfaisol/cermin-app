@@ -77,13 +77,15 @@ export function ObservationPanel({
                   {error}
                 </p>
               ) : null}
-              <button
-                type="submit"
-                disabled={pending || note.trim().length === 0}
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#3d7c6b] px-4 font-semibold text-white disabled:opacity-50 sm:w-auto"
-              >
-                {pending ? "Menyimpan…" : "Simpan"}
-              </button>
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="submit"
+                  disabled={pending || note.trim().length === 0}
+                  className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#3d7c6b] px-4 font-semibold text-white disabled:opacity-50 sm:w-auto"
+                >
+                  {pending ? "Menyimpan…" : "Simpan"}
+                </button>
+              </div>
             </form>
           )}
 
@@ -91,7 +93,7 @@ export function ObservationPanel({
             {observations.map((item) => (
               <li
                 key={item.id}
-                className="rounded-lg border border-[#e4ebe6] bg-[#f7f4ef] px-3 py-2"
+                className="cermin-hover-card rounded-lg border border-[#e4ebe6] bg-[#f7f4ef] px-3 py-2"
               >
                 <p className="whitespace-pre-wrap">{item.note}</p>
                 <p className="mt-1 text-sm text-[#5c6b73]">

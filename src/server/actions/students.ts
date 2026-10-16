@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import {
   StudentStatus,
   UserRole,
@@ -125,39 +126,56 @@ export async function listStudentsForViewer(
       ? { createdAt: parsed.order }
       : { displayName: parsed.order };
 
-  const total = await prisma.student.count({ where });
+  // Count + page in parallel (was waterfall ~2 round-trips).
+  const skip = (Math.max(parsed.page, 1) - 1) * parsed.pageSize;
+  const [total, items] = await Promise.all([
+    prisma.student.count({ where }),
+    prisma.student.findMany({
+      where,
+      select: studentListSelect,
+      orderBy,
+      skip,
+      take: parsed.pageSize,
+    }),
+  ]);
   const meta = paginationMeta({
     page: parsed.page,
     pageSize: parsed.pageSize,
     total,
   });
 
-  const items = await prisma.student.findMany({
-    where,
-    select: studentListSelect,
-    orderBy,
-    skip: meta.skip,
-    take: meta.take,
-  });
-
   return toListResult(items, meta);
 }
 
 /** Compact active list for session start dropdown (capped). */
-export async function listActiveStudentsForSession(): Promise<
+/** Deduped per RSC request (filter + form mulai sesi). */
+export const listActiveStudentsForSession = cache(async (): Promise<
   Array<{ id: string; displayName: string }>
-> {
-  const result = await listStudentsForViewer({
-    status: "ACTIVE",
-    pageSize: "50",
-    sort: "name",
-    order: "asc",
+> => {
+  const user = await requireSession();
+  const and: Prisma.StudentWhereInput[] = [{ status: StudentStatus.ACTIVE }];
+
+  if (user.role === "TERAPIS") {
+    and.push({
+      therapistAssignments: {
+        some: { therapistId: user.id, endedAt: null },
+      },
+    });
+  } else if (user.role === "ORANG_TUA") {
+    and.push({
+      parentLinks: {
+        some: { parentId: user.id, isActive: true },
+      },
+    });
+  }
+
+  return prisma.student.findMany({
+    where: { AND: and },
+    select: { id: true, displayName: true },
+    orderBy: { displayName: "asc" },
+    take: 50,
   });
-  return result.items.map((s) => ({
-    id: s.id,
-    displayName: s.displayName,
-  }));
-}
+});
 
 export type StudentDetail = Omit<Student, "adminNotes" | "allergies"> & {
   /** Only present when viewer role is ADMIN. */

@@ -1,6 +1,10 @@
 import { cache } from "react";
 import { requireSession } from "@/server/policies/access";
 import type { DashboardNavItem } from "@/components/dashboard/dashboard-nav";
+import {
+  getBrandingPublic,
+  type BrandingPublic,
+} from "@/server/queries/branding";
 
 export type DashboardShellUser = {
   name: string;
@@ -14,8 +18,12 @@ export type DashboardShellUser = {
 export const getDashboardShellData = cache(async (): Promise<{
   user: DashboardShellUser;
   navItems: DashboardNavItem[];
+  branding: BrandingPublic;
 }> => {
-  const user = await requireSession();
+  const [user, branding] = await Promise.all([
+    requireSession(),
+    getBrandingPublic(),
+  ]);
 
   const navItems: DashboardNavItem[] = [
     { href: "/dashboard", label: "Dasbor", exact: true },
@@ -38,5 +46,6 @@ export const getDashboardShellData = cache(async (): Promise<{
       hasImage: true,
     },
     navItems,
+    branding,
   };
 });

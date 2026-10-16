@@ -66,7 +66,7 @@ cp .env.example .env.local
 # isi DATABASE_URL, DIRECT_URL, Supabase keys, BETTER_AUTH_SECRET
 
 docker compose up --build
-# http://localhost:3000
+# http://localhost:5173
 
 docker compose exec web pnpm exec prisma migrate deploy
 docker compose exec web pnpm db:seed

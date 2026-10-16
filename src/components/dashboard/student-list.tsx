@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import type { ListedStudent } from "@/server/actions/students";
 import { DeleteStudentDialog } from "@/components/dashboard/delete-student-dialog";
@@ -67,7 +65,7 @@ export function StudentList({ students, isAdmin }: Props) {
           const canDelete = isAdmin && student.status === "ACTIVE";
           return (
             <li key={student.id}>
-              <article className="rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] p-4 shadow-[0_1px_2px_rgba(31,41,51,0.04)]">
+              <article className="cermin-hover-card rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] p-4 shadow-[0_1px_2px_rgba(31,41,51,0.04)]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <Link
@@ -165,7 +163,7 @@ export function StudentList({ students, isAdmin }: Props) {
               return (
                 <tr
                   key={student.id}
-                  className="border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
+                  className="cermin-hover-row border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
                 >
                   <td className="px-4 py-3">
                     <Link

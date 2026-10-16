@@ -339,10 +339,10 @@ export function CreateStudentForm({ parents }: { parents: ParentOption[] }) {
           )}
         </fieldset>
 
-        <div className="sm:col-span-2">
+        <div className="flex w-full flex-col gap-2 sm:col-span-2 sm:flex-row sm:justify-end">
           <Button
             type="submit"
-            className="min-h-11 cursor-pointer"
+            className="min-h-11 w-full cursor-pointer sm:w-auto"
             disabled={pending}
           >
             {pending ? "Menyimpan…" : "Tambah murid"}

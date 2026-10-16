@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 type MediaRef = {
   id: string;
   altText: string | null;
+  url?: string | null;
 };
 
 async function fetchMediaUrl(mediaId: string): Promise<string> {
@@ -16,11 +17,33 @@ async function fetchMediaUrl(mediaId: string): Promise<string> {
   return body.url;
 }
 
-export function PageImage({ image }: { image: MediaRef }) {
-  const [url, setUrl] = useState<string | null>(null);
+type ImageVariant = "portrait" | "story";
+
+const IMAGE_SIZE: Record<ImageVariant, string> = {
+  /* Portrait: muat di viewport HP/tablet bersama teks + nav */
+  portrait:
+    "mx-auto max-h-[min(42dvh,18rem)] w-full object-contain sm:max-h-[min(48dvh,22rem)] md:max-h-[min(52dvh,26rem)]",
+  story:
+    "mx-auto max-h-[min(40dvh,16rem)] w-full object-contain sm:max-h-[min(45dvh,20rem)]",
+};
+
+export function PageImage({
+  image,
+  variant = "story",
+}: {
+  image: MediaRef;
+  variant?: ImageVariant;
+}) {
+  const [url, setUrl] = useState<string | null>(image.url ?? null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (image.url) {
+      setUrl(image.url);
+      setError(null);
+      return;
+    }
+
     let cancelled = false;
 
     void (async () => {
@@ -39,8 +62,7 @@ export function PageImage({ image }: { image: MediaRef }) {
     return () => {
       cancelled = true;
     };
-  }, [image.id]);
-
+  }, [image.id, image.url]);
   if (error) {
     return (
       <p className="text-center text-base text-[#5c6b73]" role="status">
@@ -62,17 +84,30 @@ export function PageImage({ image }: { image: MediaRef }) {
     <img
       src={url}
       alt={image.altText ?? "Gambar cerita"}
-      className="mx-auto max-h-[55vh] w-full object-contain"
+      className={IMAGE_SIZE[variant]}
+      loading="eager"
+      decoding="async"
+      onError={() => {
+        void fetchMediaUrl(image.id)
+          .then((newUrl) => setUrl(newUrl))
+          .catch(() => setError("Gagal memuat gambar"));
+      }}
     />
   );
 }
 
 export function PageAudioButton({ audio }: { audio: MediaRef }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [url, setUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(audio.url ?? null);
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (audio.url) {
+      setUrl(audio.url);
+    }
+  }, [audio.url]);
 
   useEffect(() => {
     return () => {
@@ -103,6 +138,20 @@ export function PageAudioButton({ audio }: { audio: MediaRef }) {
       await audioRef.current.play();
       setPlaying(true);
     } catch (err) {
+      if (url) {
+        try {
+          const fresh = await fetchMediaUrl(audio.id);
+          setUrl(fresh);
+          if (audioRef.current) {
+            audioRef.current.src = fresh;
+            await audioRef.current.play();
+            setPlaying(true);
+            return;
+          }
+        } catch {
+          // ignore retry error
+        }
+      }
       setError(err instanceof Error ? err.message : "Gagal memutar suara");
       setPlaying(false);
     } finally {

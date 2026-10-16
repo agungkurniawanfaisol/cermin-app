@@ -112,6 +112,56 @@ describe("assertCanAccessMedia (I5 / IDOR)", () => {
       status: 404,
     });
   });
+
+  it("denies terapis without assignment to personalized media student", async () => {
+    mediaFindUnique.mockResolvedValue({
+      id: "m1",
+      studentId: "stu-a",
+      story: {
+        id: "st1",
+        status: StoryStatus.PUBLISHED,
+        createdById: "other",
+      },
+      page: null,
+    });
+    assignmentFindFirst.mockResolvedValue(null);
+
+    const { assertCanAccessMedia } = await import(
+      "@/server/policies/access"
+    );
+
+    await expect(
+      assertCanAccessMedia(
+        { id: "t-b", role: "TERAPIS", status: "ACTIVE" },
+        "m1",
+      ),
+    ).rejects.toMatchObject({ name: "AuthzError", status: 403 });
+  });
+
+  it("allows terapis assigned to personalized media student", async () => {
+    mediaFindUnique.mockResolvedValue({
+      id: "m1",
+      studentId: "stu-a",
+      story: {
+        id: "st1",
+        status: StoryStatus.PUBLISHED,
+        createdById: "other",
+      },
+      page: null,
+    });
+    assignmentFindFirst.mockResolvedValue({ id: "asg1" });
+
+    const { assertCanAccessMedia } = await import(
+      "@/server/policies/access"
+    );
+
+    await expect(
+      assertCanAccessMedia(
+        { id: "t-a", role: "TERAPIS", status: "ACTIVE" },
+        "m1",
+      ),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe("loadStudentAccessCtx isolation", () => {

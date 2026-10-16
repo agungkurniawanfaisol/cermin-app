@@ -1,10 +1,9 @@
 import { Suspense } from "react";
+import { PageLoading } from "@/components/ui/page-loading";
 import { notFound, redirect } from "next/navigation";
 import { SessionReader } from "@/components/belajar/session-reader";
 import { AuthzError } from "@/server/policies/access";
 import { getSessionForReader } from "@/server/actions/sessions";
-
-export const instant = false;
 
 async function BelajarSessionContent({
   params,
@@ -36,9 +35,7 @@ export default function BelajarSessionPage({
   return (
     <Suspense
       fallback={
-        <main className="px-4 py-6 font-sans text-[var(--muted,#5c6b73)] sm:px-6 sm:py-8">
-          Memuat cerita…
-        </main>
+        <PageLoading message="Memuat cerita…" variant="belajar" />
       }
     >
       <BelajarSessionContent params={params} />

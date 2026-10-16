@@ -22,7 +22,7 @@ export function SessionList({ sessions }: Props) {
       <ul className="grid gap-3 lg:hidden" aria-label="Riwayat sesi">
         {sessions.map((session) => (
           <li key={session.id}>
-            <article className="rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] p-4 shadow-[0_1px_2px_rgba(31,41,51,0.04)]">
+            <article className="cermin-hover-card rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] p-4 shadow-[0_1px_2px_rgba(31,41,51,0.04)]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <Link
@@ -69,6 +69,7 @@ export function SessionList({ sessions }: Props) {
                 <div className="mt-4 border-t border-[var(--cermin-border,#d9e2ec)] pt-3">
                   <Link
                     href={`/belajar/${session.id}`}
+                    prefetch={false}
                     className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[var(--cermin-accent,#3d7c6b)] px-3 text-sm font-medium text-white transition-colors hover:bg-[var(--focus,#0b6e4f)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2"
                   >
                     Lanjutkan
@@ -95,7 +96,7 @@ export function SessionList({ sessions }: Props) {
             {sessions.map((session) => (
               <tr
                 key={session.id}
-                className="border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
+                className="cermin-hover-row border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
               >
                 <td className="px-4 py-3 text-[var(--cermin-muted,#5c6b73)]">
                   {formatDateTimeId(session.startedAt)}
@@ -122,6 +123,7 @@ export function SessionList({ sessions }: Props) {
                   ) : (
                     <Link
                       href={`/belajar/${session.id}`}
+                      prefetch={false}
                       className="font-medium text-[var(--cermin-accent,#3d7c6b)] hover:underline"
                     >
                       Lanjutkan

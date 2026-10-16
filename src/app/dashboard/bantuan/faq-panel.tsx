@@ -102,13 +102,15 @@ export function FaqPanel({ faqs, isAdmin }: Props) {
               {createError}
             </p>
           ) : null}
-          <Button
-            type="submit"
-            className="min-h-11 w-full sm:w-auto"
-            disabled={createPending}
-          >
-            {createPending ? "Menyimpan…" : "Simpan FAQ"}
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="submit"
+              className="min-h-11 w-full sm:w-auto"
+              disabled={createPending}
+            >
+              {createPending ? "Menyimpan…" : "Simpan FAQ"}
+            </Button>
+          </div>
         </form>
       ) : null}
 
@@ -173,8 +175,8 @@ function FaqAccordionItem({
   onDelete: () => void;
 }) {
   return (
-    <details className="group rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)]">
-      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+    <details className="cermin-hover-card group rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)]">
+      <summary className="cermin-hover-row flex cursor-pointer list-none flex-wrap items-center gap-2 rounded-xl px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="min-h-11 flex-1 py-1 text-sm font-medium text-[var(--text,#1f2933)] whitespace-pre-wrap">
           {faq.question}
         </span>
@@ -287,14 +289,7 @@ function FaqEditCard({
           {error}
         </p>
       ) : null}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button
-          type="submit"
-          className="min-h-11 w-full sm:w-auto"
-          disabled={formDisabled}
-        >
-          {pending ? "Menyimpan…" : "Simpan perubahan"}
-        </Button>
+      <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button
           type="button"
           variant="outline"
@@ -303,6 +298,13 @@ function FaqEditCard({
           onClick={onCancel}
         >
           Batal
+        </Button>
+        <Button
+          type="submit"
+          className="min-h-11 w-full sm:w-auto"
+          disabled={formDisabled}
+        >
+          {pending ? "Menyimpan…" : "Simpan perubahan"}
         </Button>
       </div>
     </form>

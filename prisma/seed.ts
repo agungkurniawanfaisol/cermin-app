@@ -1,17 +1,158 @@
 import { config } from "dotenv";
+import { randomUUID } from "node:crypto";
+import { deflateSync } from "node:zlib";
 import { resolve } from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
+  MediaKind,
   PrismaClient,
   StoryStatus,
   StudentStatus,
   UserRole,
   UserStatus,
 } from "@prisma/client";
+import { createClient } from "@supabase/supabase-js";
 import { hashPassword } from "better-auth/crypto";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 config();
+
+const MEDIA_BUCKET = "cermin-media";
+
+/** Calm cover palettes (RGB) for seeded story thumbnails. */
+const COVER_PALETTES: Array<[number, number, number]> = [
+  [230, 242, 238], // accent-soft
+  [200, 224, 214],
+  [180, 210, 198],
+  [216, 232, 226],
+  [190, 218, 208],
+  [210, 228, 220],
+  [172, 204, 192],
+  [222, 236, 230],
+];
+
+function crc32(buf: Buffer): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i]!;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const typeBuf = Buffer.from(type, "ascii");
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const crcBuf = Buffer.alloc(4);
+  crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+  return Buffer.concat([len, typeBuf, data, crcBuf]);
+}
+
+/** Solid soft PNG cover (no sharp dependency). */
+function solidCoverPng(
+  width: number,
+  height: number,
+  rgb: [number, number, number],
+): Buffer {
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    const row = y * (width * 3 + 1);
+    raw[row] = 0;
+    for (let x = 0; x < width; x++) {
+      const i = row + 1 + x * 3;
+      // Soft vertical gradient toward accent green
+      const t = y / Math.max(1, height - 1);
+      raw[i] = Math.round(rgb[0] * (1 - t * 0.12));
+      raw[i + 1] = Math.round(rgb[1] * (1 - t * 0.08));
+      raw[i + 2] = Math.round(rgb[2] * (1 - t * 0.1));
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2; // RGB
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  return Buffer.concat([
+    signature,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function getSeedSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+async function ensureStoryCover(opts: {
+  storyId: string;
+  title: string;
+  createdById: string;
+  paletteIndex: number;
+}): Promise<boolean> {
+  const existing = await prisma.mediaAsset.findFirst({
+    where: {
+      storyId: opts.storyId,
+      pageId: null,
+      kind: MediaKind.IMAGE,
+      studentId: null,
+    },
+    select: { id: true },
+  });
+  if (existing) return false;
+
+  const supabase = getSeedSupabase();
+  if (!supabase) {
+    console.warn("  ! skip cover (Supabase env missing):", opts.title);
+    return false;
+  }
+
+  const rgb = COVER_PALETTES[opts.paletteIndex % COVER_PALETTES.length]!;
+  const png = solidCoverPng(640, 360, rgb);
+  const storageKey = `stories/${opts.storyId}/cover-seed-${randomUUID()}.png`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(MEDIA_BUCKET)
+    .upload(storageKey, png, {
+      contentType: "image/png",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.warn("  ! cover upload failed:", opts.title, uploadError.message);
+    return false;
+  }
+
+  await prisma.mediaAsset.create({
+    data: {
+      storyId: opts.storyId,
+      pageId: null,
+      studentId: null,
+      kind: MediaKind.IMAGE,
+      storageBucket: MEDIA_BUCKET,
+      storageKey,
+      mimeType: "image/png",
+      byteSize: png.length,
+      altText: `Gambar utama: ${opts.title}`,
+      sortOrder: 0,
+      createdById: opts.createdById,
+    },
+  });
+  console.log("  + cover", opts.title);
+  return true;
+}
 
 if (process.env.NODE_ENV === "production" && process.env.ALLOW_SEED !== "true") {
   throw new Error(
@@ -100,40 +241,47 @@ async function ensureUser(spec: SeedUser): Promise<{ id: string; email: string }
 }
 
 async function ensureCategories(): Promise<Map<string, string>> {
-  const categories = [
-    { name: "Bergiliran", description: "Antri dan bergiliran", sortOrder: 1 },
+  const activeCategories = [
+    {
+      name: "Bergiliran",
+      description: "Antri dan bergiliran saat bermain bersama teman sebaya",
+      sortOrder: 1,
+      isActive: true,
+    },
     {
       name: "Menerima Kemenangan dan Kekalahan",
-      description: "Emosi menang/kalah",
+      description: "Mengelola emosi dan merespons hasil permainan secara positif",
       sortOrder: 2,
-    },
-    { name: "Menunggu", description: "Sabar menunggu giliran", sortOrder: 3 },
-    {
-      name: "Berbagi",
-      description: "Berbagi mainan dan perhatian",
-      sortOrder: 4,
-    },
-    {
-      name: "Komunikasi",
-      description: "Mengungkapkan kebutuhan",
-      sortOrder: 5,
-    },
-    {
-      name: "Rutin Harian",
-      description: "Pagi, sekolah, tidur",
-      sortOrder: 6,
+      isActive: true,
     },
   ];
 
   const map = new Map<string, string>();
-  for (const c of categories) {
+  for (const c of activeCategories) {
     let row = await prisma.storyCategory.findFirst({ where: { name: c.name } });
     if (!row) {
       row = await prisma.storyCategory.create({ data: c });
       console.log("  + category", c.name);
+    } else {
+      row = await prisma.storyCategory.update({
+        where: { id: row.id },
+        data: {
+          description: c.description,
+          sortOrder: c.sortOrder,
+          isActive: true,
+        },
+      });
     }
     map.set(c.name, row.id);
   }
+
+  // Pastikan seluruh kategori lain nonaktif di database.
+  const activeNames = activeCategories.map((c) => c.name);
+  await prisma.storyCategory.updateMany({
+    where: { name: { notIn: activeNames } },
+    data: { isActive: false },
+  });
+
   return map;
 }
 
@@ -244,20 +392,34 @@ async function ensureStory(
   createdById: string,
 ) {
   const found = await prisma.story.findFirst({
-    where: { title: seed.title, createdById },
+    where: { title: seed.title },
     include: { pages: true },
   });
   if (found) {
-    if (found.pages.length === 0) {
+    const updated = await prisma.story.update({
+      where: { id: found.id },
+      data: {
+        categoryId,
+        description: seed.description,
+        learningObjectives: seed.objectives,
+        status: seed.status,
+        publishedAt:
+          seed.status === StoryStatus.PUBLISHED
+            ? (found.publishedAt ?? new Date())
+            : null,
+      },
+      include: { pages: true },
+    });
+    if (updated.pages.length === 0) {
       await prisma.storyPage.createMany({
         data: seed.pages.map((bodyText, i) => ({
-          storyId: found.id,
+          storyId: updated.id,
           sortOrder: i + 1,
           bodyText,
         })),
       });
     }
-    return found;
+    return updated;
   }
 
   const story = await prisma.story.create({
@@ -539,6 +701,71 @@ async function main() {
       ],
     },
     {
+      title: "Menunggu Antrian",
+      category: "Bergiliran",
+      status: StoryStatus.PUBLISHED,
+      description: "Antri di kantin atau toilet.",
+      objectives: "Anak berdiri di antrian dengan aman.",
+      pages: [
+        "Di sekolah ada antrian.",
+        "Aku berdiri di belakang teman.",
+        "Aku menunggu sampai giliranku.",
+        "Menunggu itu bagian dari hari yang baik.",
+      ],
+    },
+    {
+      title: "Berbagi Mainan",
+      category: "Bergiliran",
+      status: StoryStatus.PUBLISHED,
+      description: "Berbagi mainan favorit.",
+      objectives: "Anak menawarkan mainan kepada teman.",
+      pages: [
+        "Aku punya mainan yang aku suka.",
+        "Teman juga ingin mencoba.",
+        "Aku bisa berbagi untuk beberapa menit.",
+        "Berbagi membuat bermain lebih menyenangkan.",
+      ],
+    },
+    {
+      title: "Main Lego Bersama",
+      category: "Bergiliran",
+      status: StoryStatus.PUBLISHED,
+      description: "Membangun bersama teman.",
+      objectives: "Anak bergiliran mengambil balok.",
+      pages: [
+        "Kami membangun menara lego.",
+        "Aku mengambil satu balok.",
+        "Teman mengambil balok berikutnya.",
+        "Menara kami jadi tinggi bersama.",
+      ],
+    },
+    {
+      title: "Giliran Bicara",
+      category: "Bergiliran",
+      status: StoryStatus.PUBLISHED,
+      description: "Menunggu giliran berbicara di lingkaran kelas.",
+      objectives: "Anak menunggu gilirannya berbicara tanpa memotong.",
+      pages: [
+        "Kami duduk melingkar di kelas.",
+        "Setiap anak punya giliran bicara.",
+        "Aku mendengarkan teman sampai selesai.",
+        "Ketika giliranku, aku bicara dengan tenang.",
+      ],
+    },
+    {
+      title: "Antri di Ayunan",
+      category: "Bergiliran",
+      status: StoryStatus.PUBLISHED,
+      description: "Bergiliran memakai ayunan di halaman.",
+      objectives: "Anak menunggu di luar ayunan lalu naik saat giliran.",
+      pages: [
+        "Ayunan sedang dipakai teman.",
+        "Aku berdiri di antrian ayunan.",
+        "Aku menunggu dengan tenang.",
+        "Ketika kosong, giliranku naik ayunan.",
+      ],
+    },
+    {
       title: "Menang dan Kalah",
       category: "Menerima Kemenangan dan Kekalahan",
       status: StoryStatus.PUBLISHED,
@@ -552,60 +779,60 @@ async function main() {
       ],
     },
     {
-      title: "Menunggu Antrian",
-      category: "Menunggu",
+      title: "Ucapkan Selamat",
+      category: "Menerima Kemenangan dan Kekalahan",
       status: StoryStatus.PUBLISHED,
-      description: "Antri di kantin atau toilet.",
-      objectives: "Anak berdiri di antrian dengan aman.",
+      description: "Mengucapkan selamat saat teman menang.",
+      objectives: "Anak mengucapkan selamat tanpa marah.",
       pages: [
-        "Di sekolah ada antrian.",
-        "Aku berdiri di belakang teman.",
-        "Aku menunggu sampai giliranku.",
-        "Menunggu itu bagian dari hari yang baik.",
+        "Teman menang dalam permainan.",
+        "Aku merasa sedikit kecewa.",
+        "Aku menarik napas pelan.",
+        "Aku bilang: 'Selamat, ya!'",
       ],
     },
     {
-      title: "Berbagi Mainan",
-      category: "Berbagi",
+      title: "Main Lagi Besok",
+      category: "Menerima Kemenangan dan Kekalahan",
       status: StoryStatus.PUBLISHED,
-      description: "Berbagi mainan favorit.",
-      objectives: "Anak menawarkan mainan kepada teman.",
+      description: "Tetap semangat bermain lagi setelah kalah.",
+      objectives: "Anak mau bermain lagi di kesempatan berikutnya.",
       pages: [
-        "Aku punya mainan yang aku suka.",
-        "Teman juga ingin mencoba.",
-        "Aku bisa berbagi untuk beberapa menit.",
-        "Berbagi membuat bermain lebih menyenangkan.",
+        "Hari ini aku kalah.",
+        "Itu tidak apa-apa.",
+        "Besok aku bisa bermain lagi.",
+        "Bermain itu menyenangkan bersama teman.",
       ],
     },
     {
-      title: "Bilang Mau Tolong",
-      category: "Komunikasi",
+      title: "Napas Saat Kecewa",
+      category: "Menerima Kemenangan dan Kekalahan",
       status: StoryStatus.PUBLISHED,
-      description: "Meminta bantuan dengan kata-kata.",
-      objectives: "Anak memakai kalimat 'tolong' saat butuh bantuan.",
+      description: "Tenangkan diri saat hasil permainan mengecewakan.",
+      objectives: "Anak memakai napas pelan saat kecewa.",
       pages: [
-        "Kadang aku butuh bantuan.",
-        "Aku bisa bilang: 'Tolong, Bu.'",
-        "Orang dewasa senang membantu.",
-        "Meminta tolong itu baik.",
+        "Aku merasa kecewa.",
+        "Aku meletakkan tangan di dada.",
+        "Aku menarik napas pelan tiga kali.",
+        "Tubuhku lebih tenang, siap lanjut bermain.",
       ],
     },
     {
-      title: "Pagi ke Sekolah",
-      category: "Rutin Harian",
+      title: "Piala untuk Semua",
+      category: "Menerima Kemenangan dan Kekalahan",
       status: StoryStatus.PUBLISHED,
-      description: "Rutin pagi sebelum berangkat.",
-      objectives: "Anak mengikuti langkah rutin pagi.",
+      description: "Semua pemain berharga, bukan hanya yang menang.",
+      objectives: "Anak menghargai usaha diri dan teman.",
       pages: [
-        "Pagi hari aku bangun.",
-        "Aku cuci muka dan memakai baju.",
-        "Aku makan sarapan.",
-        "Lalu aku siap pergi ke sekolah.",
+        "Ada yang menang hari ini.",
+        "Semua sudah berusaha dengan baik.",
+        "Aku bangga sudah ikut bermain.",
+        "Kita semua boleh senang bersama.",
       ],
     },
     {
       title: "Waktu Tidur",
-      category: "Rutin Harian",
+      category: "Bergiliran",
       status: StoryStatus.DRAFT,
       description: "Draft: rutin malam.",
       objectives: "Anak tenang menjelang tidur.",
@@ -617,7 +844,7 @@ async function main() {
     },
     {
       title: "Suara Keras di Kelas",
-      category: "Komunikasi",
+      category: "Menerima Kemenangan dan Kekalahan",
       status: StoryStatus.REVIEW,
       description: "Review: mengatur suara.",
       objectives: "Anak memakai suara pelan di kelas.",
@@ -628,7 +855,7 @@ async function main() {
     },
     {
       title: "Antri di Toilet",
-      category: "Menunggu",
+      category: "Bergiliran",
       status: StoryStatus.APPROVED,
       description: "Siap dipublikasikan.",
       objectives: "Anak menunggu di luar toilet.",
@@ -636,19 +863,6 @@ async function main() {
         "Toilet sedang dipakai.",
         "Aku menunggu di luar.",
         "Ketika kosong, giliranku masuk.",
-      ],
-    },
-    {
-      title: "Main Lego Bersama",
-      category: "Berbagi",
-      status: StoryStatus.PUBLISHED,
-      description: "Membangun bersama teman.",
-      objectives: "Anak bergiliran mengambil balok.",
-      pages: [
-        "Kami membangun menara lego.",
-        "Aku mengambil satu balok.",
-        "Teman mengambil balok berikutnya.",
-        "Menara kami jadi tinggi bersama.",
       ],
     },
   ];
@@ -670,6 +884,19 @@ async function main() {
   if (published.length === 0) {
     throw new Error("Seed failed: no published stories");
   }
+
+  let coverCount = 0;
+  for (let i = 0; i < published.length; i++) {
+    const story = published[i]!;
+    const ok = await ensureStoryCover({
+      storyId: story.id,
+      title: story.title,
+      createdById: admin.id,
+      paletteIndex: i,
+    });
+    if (ok) coverCount += 1;
+  }
+  console.log("  covers seeded/ensured this run:", coverCount);
 
   // Many sessions across students / therapists / parents
   let sessionCount = 0;

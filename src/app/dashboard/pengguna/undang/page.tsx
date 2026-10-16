@@ -1,10 +1,8 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthzError, requireRole } from "@/server/policies/access";
 import { InviteForm } from "../invite-form";
 
-export const instant = false;
 
 async function UndangPenggunaContent() {
   try {
@@ -46,16 +44,8 @@ async function UndangPenggunaContent() {
   );
 }
 
-export default function UndangPenggunaPage() {
+export default async function UndangPenggunaPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat formulir…</p>
-        </main>
-      }
-    >
-      <UndangPenggunaContent />
-    </Suspense>
+    <UndangPenggunaContent />
   );
 }

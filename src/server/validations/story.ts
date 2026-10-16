@@ -44,11 +44,13 @@ export const storyIdSchema = z.object({
 
 export const createPageSchema = z.object({
   storyId: z.string().uuid("ID cerita tidak valid"),
+  title: z.string().max(200).optional(),
   bodyText: z.string().max(20000).optional(),
 });
 
 export const updatePageSchema = z.object({
   pageId: z.string().uuid("ID halaman tidak valid"),
+  title: z.string().max(200),
   bodyText: z.string().max(20000),
 });
 

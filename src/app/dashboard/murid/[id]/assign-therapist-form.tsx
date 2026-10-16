@@ -46,8 +46,8 @@ export function AssignTherapistForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-      <div className="min-w-0 flex-1 space-y-2 sm:min-w-[12rem]">
+    <form onSubmit={onSubmit} className="flex flex-col gap-3">
+      <div className="space-y-2">
         <Label htmlFor="assign-therapist">Terapis</Label>
         <select
           id="assign-therapist"
@@ -63,9 +63,15 @@ export function AssignTherapistForm({
           ))}
         </select>
       </div>
-      <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
-        {pending ? "Menugaskan…" : "Tugaskan"}
-      </Button>
+      <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button
+          type="submit"
+          className="min-h-11 w-full sm:w-auto"
+          disabled={pending}
+        >
+          {pending ? "Menugaskan…" : "Tugaskan"}
+        </Button>
+      </div>
       {error ? (
         <p className="w-full text-sm text-[var(--danger,#9b2c2c)]" role="alert">
           {error}

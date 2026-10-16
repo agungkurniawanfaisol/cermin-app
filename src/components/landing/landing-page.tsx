@@ -8,7 +8,12 @@ import {
   Users,
   Volume2,
 } from "lucide-react";
+import { LandingFooter } from "@/components/landing/landing-footer";
+import { LandingHeader } from "@/components/landing/landing-header";
+import { LandingInstitutionBar } from "@/components/landing/landing-institution-bar";
 import { LandingPhotoCarousel } from "@/components/landing/landing-photo-carousel";
+import { LandingScrollTop } from "@/components/landing/landing-scroll-top";
+import type { BrandingPublic } from "@/lib/branding-public";
 
 const CAROUSEL_SLIDES = [
   {
@@ -109,50 +114,24 @@ function SectionHeading({
   );
 }
 
-export function LandingPage() {
+export function LandingPage({
+  branding,
+}: {
+  branding: BrandingPublic;
+}) {
   return (
-    <div className="landing-root relative flex min-h-dvh flex-1 flex-col overflow-x-hidden bg-[var(--bg)] text-[var(--text)]">
+    <div className="cermin-route-enter landing-root relative flex min-h-dvh flex-1 flex-col overflow-x-hidden scroll-smooth bg-[var(--bg)] text-[var(--text)] [scroll-padding-top:4.5rem] sm:[scroll-padding-top:5.25rem]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_55%_at_15%_0%,var(--accent-soft)_0%,transparent_50%),radial-gradient(ellipse_60%_45%_at_95%_30%,color-mix(in_srgb,var(--cermin-accent)_10%,transparent)_0%,transparent_55%)]"
       />
 
-      <header className="relative z-20 border-b border-[color-mix(in_srgb,var(--cermin-border)_70%,transparent)] bg-[color-mix(in_srgb,var(--bg)_88%,white)]/90 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 sm:px-8">
-          <div className="flex items-center justify-between gap-3">
-            <a
-              href="#atas"
-              className="text-base font-semibold tracking-wide text-[var(--cermin-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
-            >
-              CERMIN
-            </a>
-            <Link
-              href="/login"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--cermin-accent)] px-4 text-sm font-medium text-white transition-opacity hover:opacity-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
-            >
-              Masuk
-            </Link>
-          </div>
-          <nav
-            className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 md:mx-0 md:overflow-visible"
-            aria-label="Navigasi halaman"
-          >
-            {[
-              { href: "#untuk-siapa", label: "Untuk siapa" },
-              { href: "#cara-kerja", label: "Cara kerja" },
-              { href: "#aman", label: "Keamanan" },
-            ].map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium text-[var(--cermin-muted)] transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-        </div>
-      </header>
+      <LandingHeader
+        hasLogo={branding.hasLogo}
+        logoVersion={branding.logoVersion}
+      />
+
+      <LandingInstitutionBar branding={branding} />
 
       <main className="relative z-10 flex-1">
         <section
@@ -339,14 +318,9 @@ export function LandingPage() {
         </section>
       </main>
 
-      <footer className="relative z-10 border-t border-[var(--cermin-border)] px-4 py-8 text-center sm:px-8">
-        <p className="text-sm font-medium text-[var(--cermin-accent)]">
-          CERMIN · CERita MIRip Aku
-        </p>
-        <p className="mt-1 text-sm text-[var(--cermin-muted)]">
-          Pembelajaran social story yang tenang untuk anak autistik
-        </p>
-      </footer>
+      <LandingFooter branding={branding} />
+
+      <LandingScrollTop />
     </div>
   );
 }

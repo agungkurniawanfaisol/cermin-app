@@ -107,10 +107,9 @@ export function UserAccountMenu({
   async function onLogout() {
     setLoggingOut(true);
     setError(null);
+    router.replace("/login");
     try {
       await authClient.signOut();
-      router.replace("/");
-      router.refresh();
     } catch {
       setError("Gagal keluar. Coba lagi.");
       setLoggingOut(false);

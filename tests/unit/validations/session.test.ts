@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addObservationSchema,
   startLearningSessionSchema,
+  updateSessionStudentSchema,
 } from "@/server/validations/session";
 
 const STUDENT_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -44,5 +45,23 @@ describe("addObservationSchema", () => {
     if (result.success) {
       expect(result.data.note).toBe("fokus baik");
     }
+  });
+});
+
+describe("updateSessionStudentSchema", () => {
+  it("accepts valid session and student ids", () => {
+    const result = updateSessionStudentSchema.safeParse({
+      sessionId: SESSION_ID,
+      studentId: STUDENT_ID,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid student id", () => {
+    const result = updateSessionStudentSchema.safeParse({
+      sessionId: SESSION_ID,
+      studentId: "x",
+    });
+    expect(result.success).toBe(false);
   });
 });

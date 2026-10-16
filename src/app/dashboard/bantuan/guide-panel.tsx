@@ -161,13 +161,15 @@ export function GuidePanel({ guides, isAdmin }: Props) {
               {uploadError}
             </p>
           ) : null}
-          <Button
-            type="submit"
-            className="min-h-11 w-full sm:w-auto"
-            disabled={uploadPending}
-          >
-            {uploadPending ? "Mengunggah…" : "Unggah petunjuk"}
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="submit"
+              className="min-h-11 w-full sm:w-auto"
+              disabled={uploadPending}
+            >
+              {uploadPending ? "Mengunggah…" : "Unggah petunjuk"}
+            </Button>
+          </div>
         </form>
       ) : null}
 
@@ -427,14 +429,16 @@ function GuidePreview({
               </label>
             </div>
           </div>
-          <Button
-            type="submit"
-            variant="outline"
-            className="min-h-11 w-full sm:w-auto"
-            disabled={formDisabled || !metaDirty}
-          >
-            {metaPending ? "Menyimpan…" : "Simpan perubahan"}
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="submit"
+              variant="outline"
+              className="min-h-11 w-full sm:w-auto"
+              disabled={formDisabled || !metaDirty}
+            >
+              {metaPending ? "Menyimpan…" : "Simpan perubahan"}
+            </Button>
+          </div>
           {metaError ? (
             <p className="text-sm text-[var(--danger,#9b2c2c)]" role="alert">
               {metaError}

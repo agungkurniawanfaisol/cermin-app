@@ -11,6 +11,10 @@ import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import {
+  resolveStoryCoverMediaId,
+  storyCoverMediaWhere,
+} from "@/lib/story-cover";
+import {
   paginationMeta,
   parseListQuery,
   toListResult,
@@ -99,13 +103,36 @@ export async function listStoriesByCategory(): Promise<ListedCategory[]> {
 export type ListedStory = {
   id: string;
   title: string;
+  description: string;
   status: StoryStatus;
   publishedAt: Date | null;
   updatedAt: Date;
   createdAt: Date;
+  pageCount: number;
   category: { id: string; name: string };
   createdBy: { id: string; name: string };
 };
+
+/** Ringkasan untuk sheet detail/pratinjau di daftar cerita. */
+export type StoryListPreview = {
+  id: string;
+  title: string;
+  description: string;
+  learningObjectives: string;
+  status: StoryStatus;
+  updatedAt: string;
+  pageCount: number;
+  category: { id: string; name: string };
+  createdBy: { id: string; name: string };
+  pages: Array<{ id: string; sortOrder: number; excerpt: string }>;
+  coverMediaId: string | null;
+};
+
+function excerptText(text: string, max = 120): string {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max - 1)}…`;
+}
 
 const STORY_STATUSES = [
   "DRAFT",
@@ -170,31 +197,129 @@ export async function listStoriesForViewer(
         ? { createdAt: parsed.order }
         : { updatedAt: parsed.order };
 
-  const total = await prisma.story.count({ where });
+  const skip = (Math.max(parsed.page, 1) - 1) * parsed.pageSize;
+  const [total, rows] = await Promise.all([
+    prisma.story.count({ where }),
+    prisma.story.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        publishedAt: true,
+        updatedAt: true,
+        createdAt: true,
+        category: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+        _count: { select: { pages: true } },
+      },
+      orderBy,
+      skip,
+      take: parsed.pageSize,
+    }),
+  ]);
+  const items: ListedStory[] = rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    publishedAt: row.publishedAt,
+    updatedAt: row.updatedAt,
+    createdAt: row.createdAt,
+    pageCount: row._count.pages,
+    category: row.category,
+    createdBy: row.createdBy,
+  }));
   const meta = paginationMeta({
     page: parsed.page,
     pageSize: parsed.pageSize,
     total,
   });
 
-  const items = await prisma.story.findMany({
-    where,
+  return toListResult(items, meta);
+}
+
+/**
+ * Detail ringkas untuk sheet daftar cerita (metadata + cuplikan halaman + cover).
+ * Authz sama akses daftar: ortu hanya published.
+ */
+export async function getStoryListPreview(
+  storyId: string,
+): Promise<StoryListPreview> {
+  const user = await requireSession();
+  const parsed = storyIdSchema.safeParse({ storyId });
+  if (!parsed.success) {
+    throw new AuthzError(
+      parsed.error.issues[0]?.message ?? "ID cerita tidak valid",
+      400,
+    );
+  }
+
+  const story = await prisma.story.findUnique({
+    where: { id: parsed.data.storyId },
     select: {
       id: true,
       title: true,
+      description: true,
+      learningObjectives: true,
       status: true,
-      publishedAt: true,
       updatedAt: true,
-      createdAt: true,
       category: { select: { id: true, name: true } },
       createdBy: { select: { id: true, name: true } },
+      media: {
+        where: storyCoverMediaWhere,
+        orderBy: { sortOrder: "desc" },
+        take: 1,
+        select: { id: true },
+      },
+      pages: {
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          sortOrder: true,
+          title: true,
+          bodyText: true,
+          media: {
+            where: { kind: "IMAGE", studentId: null },
+            orderBy: { sortOrder: "asc" },
+            take: 1,
+            select: { id: true },
+          },
+        },
+      },
     },
-    orderBy,
-    skip: meta.skip,
-    take: meta.take,
   });
 
-  return toListResult(items, meta);
+  if (!story) throw new AuthzError("Cerita tidak ditemukan", 404);
+  if (user.role === "ORANG_TUA" && story.status !== StoryStatus.PUBLISHED) {
+    throw new AuthzError();
+  }
+
+  const coverMediaId = resolveStoryCoverMediaId({
+    storyLevelCoverId: story.media[0]?.id,
+    pages: story.pages,
+  });
+
+  return {
+    id: story.id,
+    title: story.title,
+    description: story.description,
+    learningObjectives: story.learningObjectives,
+    status: story.status,
+    updatedAt: story.updatedAt.toISOString(),
+    pageCount: story.pages.length,
+    category: story.category,
+    createdBy: story.createdBy,
+    pages: story.pages.map((p) => ({
+      id: p.id,
+      sortOrder: p.sortOrder,
+      excerpt: excerptText(
+        p.title.trim() || p.bodyText || "(Belum ada teks)",
+      ),
+    })),
+    coverMediaId,
+  };
 }
 
 export type StoryPageMedia = {
@@ -203,6 +328,8 @@ export type StoryPageMedia = {
   mimeType: string;
   altText: string | null;
   sortOrder: number;
+  studentId: string | null;
+  student: { id: string; displayName: string } | null;
 };
 
 export type StoryDetail = Story & {
@@ -210,6 +337,94 @@ export type StoryDetail = Story & {
   createdBy: { id: string; name: string; email: string };
   pages: Array<StoryPage & { media: StoryPageMedia[] }>;
 };
+
+/** Shell ringan untuk header + progres langkah (tanpa media penuh). */
+export type StoryEditorShell = {
+  id: string;
+  title: string;
+  description: string;
+  learningObjectives: string;
+  categoryId: string;
+  status: StoryStatus;
+  createdById: string;
+  updatedAt: Date;
+  category: { id: string; name: string };
+  createdBy: { id: string; name: string; email: string };
+  pageCount: number;
+  pagesWithText: number;
+  pagesWithMedia: number;
+  /** IMAGE story-level (pageId null) — gambar utama admin. */
+  coverMediaId: string | null;
+};
+
+export async function getStoryEditorShell(
+  storyId: string,
+): Promise<StoryEditorShell> {
+  const user = await requireSession();
+  const parsed = storyIdSchema.safeParse({ storyId });
+  if (!parsed.success) {
+    throw new AuthzError(
+      parsed.error.issues[0]?.message ?? "ID cerita tidak valid",
+      400,
+    );
+  }
+
+  const story = await prisma.story.findUnique({
+    where: { id: parsed.data.storyId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      learningObjectives: true,
+      categoryId: true,
+      status: true,
+      createdById: true,
+      updatedAt: true,
+      category: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true, email: true } },
+      media: {
+        where: storyCoverMediaWhere,
+        orderBy: { sortOrder: "desc" },
+        take: 1,
+        select: { id: true },
+      },
+      pages: {
+        select: {
+          bodyText: true,
+          _count: { select: { media: true } },
+        },
+      },
+    },
+  });
+
+  if (!story) throw new AuthzError("Cerita tidak ditemukan", 404);
+  if (user.role === "ORANG_TUA" && story.status !== StoryStatus.PUBLISHED) {
+    throw new AuthzError();
+  }
+
+  const pageCount = story.pages.length;
+  const pagesWithText = story.pages.filter(
+    (p) => p.bodyText.trim().length > 0,
+  ).length;
+  const pagesWithMedia = story.pages.filter((p) => p._count.media > 0).length;
+
+  return {
+    id: story.id,
+    title: story.title,
+    description: story.description,
+    learningObjectives: story.learningObjectives,
+    categoryId: story.categoryId,
+    status: story.status,
+    createdById: story.createdById,
+    updatedAt: story.updatedAt,
+    category: story.category,
+    createdBy: story.createdBy,
+    pageCount,
+    pagesWithText,
+    pagesWithMedia,
+    coverMediaId: story.media[0]?.id ?? null,
+  };
+}
 
 export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
   const user = await requireSession();
@@ -237,6 +452,8 @@ export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
               mimeType: true,
               altText: true,
               sortOrder: true,
+              studentId: true,
+              student: { select: { id: true, displayName: true } },
             },
           },
         },
@@ -273,6 +490,39 @@ export async function listCategoriesForFilter(): Promise<
     where: { isActive: true },
     select: { id: true, name: true },
     orderBy: { sortOrder: "asc" },
+  });
+}
+
+/**
+ * Daftar murid aktif untuk dropdown uploader media personalisasi di cerita.
+ * ADMIN: seluruh murid aktif.
+ * TERAPIS: murid aktif dengan penugasan terapis aktif (endedAt: null).
+ */
+export async function listStudentsForStoryUpload(): Promise<
+  Array<{ id: string; displayName: string }>
+> {
+  const user = await requireRole("ADMIN", "TERAPIS");
+
+  if (user.role === "ADMIN") {
+    return prisma.student.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, displayName: true },
+      orderBy: { displayName: "asc" },
+    });
+  }
+
+  return prisma.student.findMany({
+    where: {
+      status: "ACTIVE",
+      therapistAssignments: {
+        some: {
+          therapistId: user.id,
+          endedAt: null,
+        },
+      },
+    },
+    select: { id: true, displayName: true },
+    orderBy: { displayName: "asc" },
   });
 }
 
@@ -421,6 +671,7 @@ export async function createStoryPage(
       data: {
         storyId: story.id,
         sortOrder: nextOrder,
+        title: parsed.data.title ?? "",
         bodyText: parsed.data.bodyText ?? "",
       },
     });
@@ -433,7 +684,8 @@ export async function createStoryPage(
       metadata: { storyId: story.id, sortOrder: nextOrder },
     });
 
-    revalidateStoryPaths(story.id);
+    // Tanpa revalidate detail: soft-refresh RSC me-remount PagesEditor
+    // dan item halaman sebelumnya hilang dari UI. List lokal di klien cukup.
     return { ok: true, data: { id: page.id } };
   } catch (error) {
     return {
@@ -467,10 +719,13 @@ export async function updateStoryPage(
 
     await prisma.storyPage.update({
       where: { id: page.id },
-      data: { bodyText: parsed.data.bodyText },
+      data: {
+        title: parsed.data.title,
+        bodyText: parsed.data.bodyText,
+      },
     });
 
-    revalidateStoryPaths(page.storyId);
+    // Editor detail pakai state lokal — jangan remount via revalidate.
     return { ok: true, data: { id: page.id } };
   } catch (error) {
     return {
@@ -531,7 +786,7 @@ export async function deleteStoryPage(
       metadata: { storyId: page.storyId },
     });
 
-    revalidateStoryPaths(page.storyId);
+    // State list di PagesEditor; hindari remount detail.
     return { ok: true, data: { id: pageId } };
   } catch (error) {
     return {
@@ -590,7 +845,7 @@ export async function reorderStoryPages(
       }
     });
 
-    revalidateStoryPaths(story.id);
+    // Urutan sudah di state klien; jangan remount detail.
     return { ok: true, data: { storyId: story.id } };
   } catch (error) {
     return {
@@ -603,6 +858,7 @@ export async function reorderStoryPages(
 type SnapshotPage = {
   id: string;
   sortOrder: number;
+  title: string;
   bodyText: string;
   media: Array<{
     id: string;
@@ -627,6 +883,7 @@ function buildPublishSnapshot(story: {
     pages: story.pages.map((p) => ({
       id: p.id,
       sortOrder: p.sortOrder,
+      title: p.title,
       bodyText: p.bodyText,
       media: p.media.map((m) => ({
         id: m.id,

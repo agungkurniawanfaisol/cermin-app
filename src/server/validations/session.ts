@@ -18,7 +18,15 @@ export const addObservationSchema = z.object({
     .max(5000, "Catatan terlalu panjang"),
 });
 
+export const updateSessionStudentSchema = z.object({
+  sessionId: z.string().uuid("ID sesi tidak valid"),
+  studentId: z.string().uuid("ID murid tidak valid"),
+});
+
 export type StartLearningSessionInput = z.infer<
   typeof startLearningSessionSchema
 >;
 export type AddObservationInput = z.infer<typeof addObservationSchema>;
+export type UpdateSessionStudentInput = z.infer<
+  typeof updateSessionStudentSchema
+>;

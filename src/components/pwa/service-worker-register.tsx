@@ -4,13 +4,22 @@ import { useEffect } from "react";
 import { APP_VERSION } from "@/lib/app-version";
 
 /**
- * Registers the installable service worker (production / HTTPS / localhost).
- * SW file busted by app version so updates pick up after deploy.
+ * Registers the installable service worker (production HTTPS).
+ * Dev: unregister — SW navigate fallback ke offline.html + reload
+ * bisa terasa seperti loop refresh di localhost.
  */
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
+
+    // Development: bersihkan SW lama agar tidak intercept navigasi.
+    if (process.env.NODE_ENV === "development") {
+      void navigator.serviceWorker.getRegistrations().then((regs) =>
+        Promise.all(regs.map((r) => r.unregister())),
+      );
+      return;
+    }
 
     const isLocal =
       window.location.hostname === "localhost" ||

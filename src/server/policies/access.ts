@@ -280,6 +280,13 @@ export async function assertCanAccessMedia(
 
   if (canEditStoryContent(user, story)) return;
 
+  // Personalized image: only adults who can access that student.
+  if (media.studentId) {
+    if (story.status !== StoryStatus.PUBLISHED) throw new AuthzError();
+    await assertCanAccessStudent(user, media.studentId);
+    return;
+  }
+
   if (
     story.status === StoryStatus.PUBLISHED &&
     (await userHasAnyStudentAccess(user))

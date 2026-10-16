@@ -46,11 +46,15 @@ export function BantuanTabs({
     if (next == null) return;
     const value = String(next) as TabValue;
     if (value !== "faq" && value !== "petunjuk") return;
+    // Skip replace bila tab sama — cegah soft-nav / loading loop.
+    if (value === current) return;
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", value);
+    if (value === "faq") params.delete("tab");
+    else params.set("tab", value);
     const qs = params.toString();
+    const href = qs ? `${pathname}?${qs}` : pathname;
     startTransition(() => {
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      router.replace(href, { scroll: false });
     });
   }
 

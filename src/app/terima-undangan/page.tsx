@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { PageLoading } from "@/components/ui/page-loading";
 import { AcceptInviteForm } from "./accept-invite-form";
 
 export const instant = false;
@@ -49,9 +50,11 @@ export default function TerimaUndanganPage({
   return (
     <Suspense
       fallback={
-        <main className="flex flex-1 items-center justify-center px-4 py-6 font-sans text-[var(--muted,#5c6b73)] sm:px-6 sm:py-8">
-          Memuat…
-        </main>
+        <PageLoading
+          message="Memuat undangan…"
+          variant="belajar"
+          className="min-h-dvh bg-[var(--bg,#f7f4ef)]"
+        />
       }
     >
       <TerimaUndanganContent searchParams={searchParams} />

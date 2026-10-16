@@ -6,7 +6,7 @@ loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv();
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
 
 export default defineConfig({
   testDir: "./e2e",

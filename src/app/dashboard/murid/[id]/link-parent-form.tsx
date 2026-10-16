@@ -80,8 +80,12 @@ export function LinkParentForm({
           disabled={pending}
         />
       </div>
-      <div className="flex items-end sm:col-span-1">
-        <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
+      <div className="flex w-full flex-col gap-2 sm:col-span-3 sm:flex-row sm:justify-end">
+        <Button
+          type="submit"
+          className="min-h-11 w-full sm:w-auto"
+          disabled={pending}
+        >
           {pending ? "Menautkan…" : "Tautkan"}
         </Button>
       </div>

@@ -37,7 +37,7 @@ export function DashboardBreadcrumbs({ className }: DashboardBreadcrumbsProps) {
             ) : (
               <Link
                 href={crumb.href}
-                className="truncate text-[var(--cermin-muted,#5c6b73)] transition-colors hover:text-[var(--cermin-accent,#3d7c6b)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2 rounded"
+                className="truncate rounded text-[var(--cermin-muted,#5c6b73)] transition-colors hover:text-[var(--cermin-accent,#3d7c6b)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2"
               >
                 {crumb.label}
               </Link>

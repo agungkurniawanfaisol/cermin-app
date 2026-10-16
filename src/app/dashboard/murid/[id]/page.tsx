@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { UserRole, UserStatus } from "@prisma/client";
@@ -19,7 +18,6 @@ import {
 import { ArchiveStudentButton } from "./archive-student-button";
 import { formatDateLongId, formatDateTimeId } from "@/lib/format-date";
 
-export const instant = false;
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Aktif",
@@ -40,8 +38,69 @@ async function MuridDetailContent({ id }: { id: string }) {
   const isAdmin = user.role === "ADMIN";
 
   let student;
+  let therapists: Array<{ id: string; name: string; email: string }> = [];
+  let parents: Array<{ id: string; name: string; email: string }> = [];
+  let personalizedMedia: Array<{
+    id: string;
+    kind: string;
+    altText: string | null;
+    story: {
+      id: string;
+      title: string;
+      status: string;
+      category: { name: string };
+    } | null;
+    page: { sortOrder: number } | null;
+  }> = [];
   try {
-    student = await getStudentDetail(id);
+    const [
+      studentResult,
+      therapistResult,
+      parentResult,
+      personalizedMediaResult,
+    ] = await Promise.all([
+      getStudentDetail(id),
+      isAdmin
+        ? prisma.user.findMany({
+            where: { role: UserRole.TERAPIS, status: UserStatus.ACTIVE },
+            select: { id: true, name: true, email: true },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([]),
+      isAdmin
+        ? prisma.user.findMany({
+            where: { role: UserRole.ORANG_TUA, status: UserStatus.ACTIVE },
+            select: { id: true, name: true, email: true },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([]),
+      prisma.mediaAsset.findMany({
+        where: { studentId: id },
+        select: {
+          id: true,
+          kind: true,
+          altText: true,
+          story: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              category: { select: { name: true } },
+            },
+          },
+          page: {
+            select: {
+              sortOrder: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+    student = studentResult;
+    therapists = therapistResult;
+    parents = parentResult;
+    personalizedMedia = personalizedMediaResult;
   } catch (error) {
     if (error instanceof AuthzError) {
       if (error.status === 404) notFound();
@@ -50,24 +109,35 @@ async function MuridDetailContent({ id }: { id: string }) {
     throw error;
   }
 
-  const [therapists, parents] = isAdmin
-    ? await Promise.all([
-        prisma.user.findMany({
-          where: { role: UserRole.TERAPIS, status: UserStatus.ACTIVE },
-          select: { id: true, name: true, email: true },
-          orderBy: { name: "asc" },
-        }),
-        prisma.user.findMany({
-          where: { role: UserRole.ORANG_TUA, status: UserStatus.ACTIVE },
-          select: { id: true, name: true, email: true },
-          orderBy: { name: "asc" },
-        }),
-      ])
-    : [[], []];
-
   const activeLinks = student.parentLinks.filter((l) => l.isActive);
   const inactiveLinks = student.parentLinks.filter((l) => !l.isActive);
 
+  const storyMap = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      status: string;
+      categoryName: string;
+      mediaCount: number;
+    }
+  >();
+  for (const m of personalizedMedia) {
+    if (!m.story) continue;
+    const existing = storyMap.get(m.story.id);
+    if (existing) {
+      existing.mediaCount += 1;
+    } else {
+      storyMap.set(m.story.id, {
+        id: m.story.id,
+        title: m.story.title,
+        status: m.story.status,
+        categoryName: m.story.category.name,
+        mediaCount: 1,
+      });
+    }
+  }
+  const personalizedStories = Array.from(storyMap.values());
   return (
     <main className="w-full flex-1 space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
       <div>
@@ -285,6 +355,76 @@ async function MuridDetailContent({ id }: { id: string }) {
         </section>
       ) : null}
 
+      <section className="space-y-4" aria-labelledby="cerita-media-heading">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2
+              id="cerita-media-heading"
+              className="text-lg font-semibold text-[var(--text,#1f2933)]"
+            >
+              Cerita & Personalisasi Media Murid
+            </h2>
+            <p className="mt-1 text-sm text-[var(--cermin-muted,#5c6b73)]">
+              Cerita sosial yang memiliki foto personalisasi {student.displayName} (CERMIN: CERita MIRip Aku).
+            </p>
+          </div>
+          <Link
+            href="/dashboard/cerita"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-4 py-2 text-sm font-medium text-[var(--text,#1f2933)] hover:bg-[var(--bg,#f7f4ef)]"
+          >
+            Katalog Cerita
+          </Link>
+        </div>
+
+        {personalizedStories.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[var(--cermin-border,#d9e2ec)] bg-white p-6 text-center">
+            <p className="text-sm font-medium text-[var(--text,#1f2933)]">
+              Belum ada foto personalisasi di cerita sosial
+            </p>
+            <p className="mt-1 text-sm text-[var(--cermin-muted,#5c6b73)]">
+              Unggah foto {student.displayName} pada halaman cerita di menu Cerita agar foto dirinya muncul saat sesi belajar.
+            </p>
+          </div>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {personalizedStories.map((story) => (
+              <li
+                key={story.id}
+                className="cermin-hover-card flex flex-col justify-between rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-[var(--cermin-muted,#5c6b73)]">
+                      {story.categoryName}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-[var(--cermin-accent-soft,#e6f2ee)] px-2.5 py-0.5 text-xs font-semibold text-[var(--cermin-accent,#3d7c6b)]">
+                      {story.mediaCount} foto murid
+                    </span>
+                  </div>
+                  <h3 className="mt-2 font-semibold text-[var(--text,#1f2933)]">
+                    {story.title}
+                  </h3>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--cermin-border,#d9e2ec)] pt-3">
+                  <Link
+                    href={`/dashboard/cerita/${story.id}`}
+                    className="inline-flex min-h-10 items-center text-xs font-medium text-[var(--cermin-accent,#3d7c6b)] hover:underline"
+                  >
+                    Detail cerita →
+                  </Link>
+                  <Link
+                    href={`/dashboard/sesi?tab=riwayat&studentId=${student.id}`}
+                    className="inline-flex min-h-10 items-center text-xs font-medium text-[var(--text,#1f2933)] hover:underline"
+                  >
+                    Mulai sesi belajar →
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-[var(--text,#1f2933)]">
           Riwayat penugasan terapis
@@ -301,7 +441,7 @@ async function MuridDetailContent({ id }: { id: string }) {
           {student.therapistAssignments.map((a) => (
             <li
               key={a.id}
-              className="rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4"
+              className="cermin-hover-card rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4"
             >
               <p className="font-semibold text-[var(--text,#1f2933)]">
                 {a.therapist.name}
@@ -346,7 +486,7 @@ async function MuridDetailContent({ id }: { id: string }) {
               {student.therapistAssignments.map((a) => (
                 <tr
                   key={a.id}
-                  className="border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
+                  className="cermin-hover-row border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
                 >
                   <td className="px-4 py-3">
                     <div className="font-medium text-[var(--text,#1f2933)]">
@@ -409,7 +549,7 @@ async function MuridDetailContent({ id }: { id: string }) {
           {[...activeLinks, ...inactiveLinks].map((link) => (
             <li
               key={link.id}
-              className="rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4"
+              className="cermin-hover-card rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-white p-4"
             >
               <p className="font-semibold text-[var(--text,#1f2933)]">
                 {link.parent.name}
@@ -452,7 +592,7 @@ async function MuridDetailContent({ id }: { id: string }) {
               {[...activeLinks, ...inactiveLinks].map((link) => (
                 <tr
                   key={link.id}
-                  className="border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
+                  className="cermin-hover-row border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
                 >
                   <td className="px-4 py-3">
                     <div className="font-medium text-[var(--text,#1f2933)]">
@@ -499,21 +639,13 @@ async function MuridDetailContent({ id }: { id: string }) {
   );
 }
 
-export default function MuridDetailPage({
+export default async function MuridDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   return (
-    <Suspense
-      fallback={
-        <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-          <p className="text-[var(--cermin-muted,#5c6b73)]">Memuat murid…</p>
-        </main>
-      }
-    >
-      <MuridDetailLoader params={params} />
-    </Suspense>
+    <MuridDetailLoader params={params} />
   );
 }
 

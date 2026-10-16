@@ -297,20 +297,26 @@ export function EditStudentProfileForm({ student }: EditStudentProfileFormProps)
         </div>
       ) : null}
 
-      <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
-        <Button type="submit" className="min-h-11 cursor-pointer" disabled={pending}>
+      <div className="flex w-full flex-col gap-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-h-5" aria-live="polite">
+          {message ? (
+            <p className="text-sm text-[var(--success,#2f6f4e)]" role="status">
+              {message}
+            </p>
+          ) : null}
+          {error ? (
+            <p className="text-sm text-[var(--danger,#9b2c2c)]" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          type="submit"
+          className="min-h-11 w-full cursor-pointer sm:w-auto"
+          disabled={pending}
+        >
           {pending ? "Menyimpan…" : "Simpan profil"}
         </Button>
-        {message ? (
-          <p className="text-sm text-[var(--success,#2f6f4e)]" role="status">
-            {message}
-          </p>
-        ) : null}
-        {error ? (
-          <p className="text-sm text-[var(--danger,#9b2c2c)]" role="alert">
-            {error}
-          </p>
-        ) : null}
       </div>
     </form>
   );

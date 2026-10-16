@@ -25,11 +25,12 @@ export function LogoutButton({
   async function handleLogout() {
     if (pending) return;
     setPending(true);
+    // Navigate immediately; sign-out in background so UI tidak menunggu round-trip.
+    router.replace("/login");
     try {
       await authClient.signOut();
-      router.replace("/");
-      router.refresh();
     } catch {
+      // Sudah di /login; biarkan user masuk ulang jika sesi masih ada.
       setPending(false);
     }
   }

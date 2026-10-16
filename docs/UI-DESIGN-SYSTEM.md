@@ -72,14 +72,27 @@ Hindari purple-glow / cream-terracotta AI clichés sebagai identitas utama; pale
 Gunakan shadcn untuk dashboard primitives (Button, Input, Dialog, Table, Tabs, Toast).  
 Child mode: komponen khusus lebih sederhana — PageFrame, StoryText, MediaFigure, NavControls, AudioPlayButton.
 
+### Editor halaman cerita (dashboard)
+
+Setiap item halaman (accordion) memakai **Tabs** line-style (bukan empat form vertikal):
+
+1. **Judul & Deskripsi** — `title` + `bodyText`
+2. **Foto Murid** — kiri roster foto personalisasi; kanan panel keterangan
+3. **Ilustrasi** — gambar umum (`studentId` null, `IMAGE`)
+4. **Audio & Tambahan** — audio narasi + ilustrasi tambahan
+
+Satu CTA **Simpan halaman** di kaki panel (unggah semua pending). Touch target ≥44px; label tab pendek di mobile.
+
 ## 8. Child mode layout (viewport pertama)
 
 Isi tipikal satu halaman cerita:
 
 1. Judul cerita (opsional kecil) / progress halaman sederhana non-kompetitif (“Halaman 2 dari 5”).
-2. Ilustrasi full-bleed dalam area konten (bukan collage kartu).
-3. Teks halaman.
-4. Grup CTA: Sebelumnya / Berikutnya (+ Putar audio jika ada).
+2. **Baris atas (md+ berdampingan; mobile stack):**
+   - Kiri: foto murid personalisasi per halaman (`MediaAsset` dengan `studentId`). Kosong → placeholder tenang (tanpa fallback foto profil).
+   - Kanan: dropdown nama murid (boleh diganti mid-session) + teks halaman.
+3. **Bawah:** ilustrasi & audio umum admin (`studentId` null) — berdampingan dengan foto kiri, tidak saling menggantikan. Audio tetap manual play.
+4. Grup CTA: Sebelumnya / Berikutnya.
 
 Tidak ada stats, badges mengambang, atau promo overlay di atas media.
 

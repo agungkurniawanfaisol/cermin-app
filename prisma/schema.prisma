@@ -175,6 +175,7 @@ model Student {
   therapistAssignments TherapistAssignment[]
   parentLinks          ParentLink[]
   learningSessions     LearningSession[]
+  mediaAssets          MediaAsset[]
 
   // List murid: filter status + sort nama / tanggal dibuat
   @@index([status, displayName])
@@ -288,6 +289,8 @@ model StoryPage {
   id        String   @id @default(uuid()) @db.Uuid
   storyId   String   @db.Uuid
   sortOrder Int
+  /// Judul singkat halaman (editor / pratinjau); teks cerita tetap di bodyText.
+  title     String   @default("")
   bodyText  String   @default("")
   story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
   media     MediaAsset[]
@@ -300,6 +303,8 @@ model MediaAsset {
   id            String     @id @default(uuid()) @db.Uuid
   storyId       String?    @db.Uuid
   pageId        String?    @db.Uuid
+  /// Null = media bersama; set = gambar personalisasi murid pada halaman.
+  studentId     String?    @db.Uuid
   kind          MediaKind
   storageBucket String     @default("cermin-media")
   storageKey    String
@@ -311,10 +316,18 @@ model MediaAsset {
   createdAt     DateTime   @default(now())
   story         Story?     @relation(fields: [storyId], references: [id], onDelete: Cascade)
   page          StoryPage? @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  student       Student?   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   createdBy     User       @relation(fields: [createdById], references: [id])
 
   @@index([pageId])
   @@index([storyId])
+  @@index([studentId])
+  @@index([pageId, studentId])
+  // Partial unique: one personalized IMAGE per (page, student).
+  // Prisma cannot express WHERE; enforced in migration:
+  // CREATE UNIQUE INDEX media_assets_page_student_image_unique
+  //   ON media_assets ("pageId", "studentId")
+  //   WHERE kind = 'IMAGE' AND "studentId" IS NOT NULL AND "pageId" IS NOT NULL;
   @@map("media_assets")
 }
 
@@ -435,4 +448,24 @@ model AuditLog {
   @@index([createdAt(sort: Desc)])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+/// Branding lembaga (singleton id = default). Logo di bucket privat cermin-media.
+model InstitutionBranding {
+  id          String   @id @db.VarChar(32)
+  /// Storage key privat (bukan URL publik).
+  logoKey     String?
+  logoMime    String?
+  /// Nama lembaga untuk footer / chrome publik.
+  name        String?  @db.VarChar(200)
+  address     String?  @db.Text
+  websiteUrl  String?  @db.VarChar(500)
+  instagramUrl String? @db.VarChar(500)
+  facebookUrl String?  @db.VarChar(500)
+  youtubeUrl  String?  @db.VarChar(500)
+  whatsappUrl String?  @db.VarChar(500)
+  updatedAt   DateTime @updatedAt
+  updatedById String?  @db.Uuid
+
+  @@map("institution_branding")
 }

@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { LandingPage } from "@/components/landing/landing-page";
+import { PageLoading } from "@/components/ui/page-loading";
+import { getBrandingPublic } from "@/server/queries/branding";
 
 export const metadata: Metadata = {
   title: "CERMIN — CERita MIRip Aku",
@@ -12,20 +14,25 @@ export const metadata: Metadata = {
 };
 
 async function HomeGate(): Promise<React.ReactNode> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const [session, branding] = await Promise.all([
+    auth.api.getSession({ headers: await headers() }),
+    getBrandingPublic(),
+  ]);
   if (session?.user) {
     redirect("/dashboard");
   }
-  return <LandingPage />;
+  return <LandingPage branding={branding} />;
 }
 
 export default function Home() {
   return (
     <Suspense
       fallback={
-        <main className="flex flex-1 items-center justify-center bg-[var(--bg,#f7f4ef)] p-8 font-sans text-[var(--muted,#5c6b73)]">
-          Memuat…
-        </main>
+        <PageLoading
+          message="Memuat…"
+          variant="belajar"
+          className="min-h-dvh bg-[var(--bg,#f7f4ef)]"
+        />
       }
     >
       <HomeGate />
