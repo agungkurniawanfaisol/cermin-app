@@ -96,6 +96,119 @@ function getSeedSupabase() {
   });
 }
 
+/** Marker di storageKey: foto unduhan internet (bukan PNG solid lama). */
+function isWebSeedKey(storageKey: string): boolean {
+  return storageKey.includes("-seed-web-");
+}
+
+async function removeStorageObject(storageKey: string | null | undefined) {
+  if (!storageKey) return;
+  const supabase = getSeedSupabase();
+  if (!supabase) return;
+  try {
+    await supabase.storage.from(MEDIA_BUCKET).remove([storageKey]);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Unduh foto dari internet (picsum deterministik / pravatar untuk portrait).
+ * Fallback PNG solid jika fetch gagal.
+ */
+async function fetchSeedPhoto(opts: {
+  width: number;
+  height: number;
+  seed: string;
+  kind: "cover" | "illustration" | "portrait" | "category";
+}): Promise<{ buffer: Buffer; contentType: string; ext: string }> {
+  const urls: string[] =
+    opts.kind === "portrait"
+      ? [
+          // Wajah konsisten per seed (uji portrait murid)
+          `https://i.pravatar.cc/${Math.max(opts.width, opts.height)}?u=${encodeURIComponent(opts.seed)}`,
+          `https://picsum.photos/seed/${encodeURIComponent(opts.seed)}/${opts.width}/${opts.height}`,
+        ]
+      : [
+          `https://picsum.photos/seed/${encodeURIComponent(opts.seed)}/${opts.width}/${opts.height}`,
+          `https://picsum.photos/${opts.width}/${opts.height}?random=${encodeURIComponent(opts.seed)}`,
+        ];
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        redirect: "follow",
+        headers: { Accept: "image/jpeg,image/png,image/webp,*/*" },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) continue;
+      const contentType =
+        (res.headers.get("content-type") ?? "image/jpeg").split(";")[0]!.trim() ||
+        "image/jpeg";
+      if (!contentType.startsWith("image/")) continue;
+      const buffer = Buffer.from(await res.arrayBuffer());
+      if (buffer.length < 500) continue;
+      const ext = contentType.includes("png")
+        ? "png"
+        : contentType.includes("webp")
+          ? "webp"
+          : "jpg";
+      return { buffer, contentType, ext };
+    } catch {
+      // coba URL berikutnya
+    }
+  }
+
+  const rgb =
+    COVER_PALETTES[
+      Math.abs(
+        [...opts.seed].reduce((a, c) => a + c.charCodeAt(0), 0),
+      ) % COVER_PALETTES.length
+    ]!;
+  console.warn("  ! fallback solid PNG:", opts.seed);
+  return {
+    buffer: solidCoverPng(opts.width, opts.height, rgb),
+    contentType: "image/png",
+    ext: "png",
+  };
+}
+
+async function uploadSeedPhoto(opts: {
+  storageKey: string;
+  width: number;
+  height: number;
+  seed: string;
+  kind: "cover" | "illustration" | "portrait" | "category";
+}): Promise<
+  { ok: true; byteSize: number; mimeType: string } | { ok: false }
+> {
+  const supabase = getSeedSupabase();
+  if (!supabase) {
+    console.warn("  ! skip media (Supabase env missing):", opts.storageKey);
+    return { ok: false };
+  }
+  const photo = await fetchSeedPhoto({
+    width: opts.width,
+    height: opts.height,
+    seed: opts.seed,
+    kind: opts.kind,
+  });
+  const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(
+    opts.storageKey,
+    photo.buffer,
+    { contentType: photo.contentType, upsert: true },
+  );
+  if (error) {
+    console.warn("  ! upload failed:", opts.storageKey, error.message);
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    byteSize: photo.buffer.length,
+    mimeType: photo.contentType,
+  };
+}
+
 async function ensureStoryCover(opts: {
   storyId: string;
   title: string;
@@ -109,31 +222,24 @@ async function ensureStoryCover(opts: {
       kind: MediaKind.IMAGE,
       studentId: null,
     },
-    select: { id: true },
+    select: { id: true, storageKey: true },
   });
-  if (existing) return false;
-
-  const supabase = getSeedSupabase();
-  if (!supabase) {
-    console.warn("  ! skip cover (Supabase env missing):", opts.title);
-    return false;
+  if (existing && isWebSeedKey(existing.storageKey)) return false;
+  if (existing) {
+    await removeStorageObject(existing.storageKey);
+    await prisma.mediaAsset.delete({ where: { id: existing.id } });
   }
 
-  const rgb = COVER_PALETTES[opts.paletteIndex % COVER_PALETTES.length]!;
-  const png = solidCoverPng(640, 360, rgb);
-  const storageKey = `stories/${opts.storyId}/cover-seed-${randomUUID()}.png`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(MEDIA_BUCKET)
-    .upload(storageKey, png, {
-      contentType: "image/png",
-      upsert: false,
-    });
-
-  if (uploadError) {
-    console.warn("  ! cover upload failed:", opts.title, uploadError.message);
-    return false;
-  }
+  const seed = `cover-${opts.storyId}-${opts.paletteIndex}`;
+  const storageKey = `stories/${opts.storyId}/cover-seed-web-${randomUUID()}.jpg`;
+  const uploaded = await uploadSeedPhoto({
+    storageKey,
+    width: 800,
+    height: 450,
+    seed,
+    kind: "cover",
+  });
+  if (!uploaded.ok) return false;
 
   await prisma.mediaAsset.create({
     data: {
@@ -143,14 +249,174 @@ async function ensureStoryCover(opts: {
       kind: MediaKind.IMAGE,
       storageBucket: MEDIA_BUCKET,
       storageKey,
-      mimeType: "image/png",
-      byteSize: png.length,
+      mimeType: uploaded.mimeType,
+      byteSize: uploaded.byteSize,
       altText: `Gambar utama: ${opts.title}`,
       sortOrder: 0,
       createdById: opts.createdById,
     },
   });
-  console.log("  + cover", opts.title);
+  console.log("  + cover (web)", opts.title);
+  return true;
+}
+
+/** Shared story illustration on a page (studentId null). */
+async function ensurePageIllustration(opts: {
+  storyId: string;
+  pageId: string;
+  createdById: string;
+  paletteIndex: number;
+  label: string;
+}): Promise<boolean> {
+  const existing = await prisma.mediaAsset.findFirst({
+    where: {
+      pageId: opts.pageId,
+      kind: MediaKind.IMAGE,
+      studentId: null,
+    },
+    select: { id: true, storageKey: true },
+  });
+  if (existing && isWebSeedKey(existing.storageKey)) return false;
+  if (existing) {
+    await removeStorageObject(existing.storageKey);
+    await prisma.mediaAsset.delete({ where: { id: existing.id } });
+  }
+
+  const seed = `illust-${opts.pageId}-${opts.paletteIndex}`;
+  const storageKey = `stories/${opts.storyId}/pages/${opts.pageId}/illustration-seed-web-${randomUUID()}.jpg`;
+  const uploaded = await uploadSeedPhoto({
+    storageKey,
+    width: 800,
+    height: 500,
+    seed,
+    kind: "illustration",
+  });
+  if (!uploaded.ok) return false;
+
+  try {
+    await prisma.mediaAsset.create({
+      data: {
+        storyId: opts.storyId,
+        pageId: opts.pageId,
+        studentId: null,
+        kind: MediaKind.IMAGE,
+        storageBucket: MEDIA_BUCKET,
+        storageKey,
+        mimeType: uploaded.mimeType,
+        byteSize: uploaded.byteSize,
+        altText: `Ilustrasi: ${opts.label}`,
+        sortOrder: 0,
+        createdById: opts.createdById,
+      },
+    });
+  } catch (err) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code: string }).code === "P2002"
+    ) {
+      return false;
+    }
+    throw err;
+  }
+  return true;
+}
+
+/** Personalized portrait for a page + student. */
+async function ensurePagePortrait(opts: {
+  storyId: string;
+  pageId: string;
+  studentId: string;
+  studentName: string;
+  createdById: string;
+  paletteIndex: number;
+}): Promise<boolean> {
+  const existing = await prisma.mediaAsset.findFirst({
+    where: {
+      pageId: opts.pageId,
+      kind: MediaKind.IMAGE,
+      studentId: opts.studentId,
+    },
+    select: { id: true, storageKey: true },
+  });
+  if (existing && isWebSeedKey(existing.storageKey)) return false;
+  if (existing) {
+    await removeStorageObject(existing.storageKey);
+    await prisma.mediaAsset.delete({ where: { id: existing.id } });
+  }
+
+  const seed = `portrait-${opts.studentId}-${opts.pageId}`;
+  const storageKey = `stories/${opts.storyId}/pages/${opts.pageId}/students/${opts.studentId}/portrait-seed-web-${randomUUID()}.jpg`;
+  const uploaded = await uploadSeedPhoto({
+    storageKey,
+    width: 480,
+    height: 640,
+    seed,
+    kind: "portrait",
+  });
+  if (!uploaded.ok) return false;
+
+  try {
+    await prisma.mediaAsset.create({
+      data: {
+        storyId: opts.storyId,
+        pageId: opts.pageId,
+        studentId: opts.studentId,
+        kind: MediaKind.IMAGE,
+        storageBucket: MEDIA_BUCKET,
+        storageKey,
+        mimeType: uploaded.mimeType,
+        byteSize: uploaded.byteSize,
+        altText: `Foto ${opts.studentName}`,
+        sortOrder: 0,
+        createdById: opts.createdById,
+      },
+    });
+  } catch (err) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code: string }).code === "P2002"
+    ) {
+      return false;
+    }
+    throw err;
+  }
+  return true;
+}
+
+async function ensureCategoryCover(opts: {
+  categoryId: string;
+  name: string;
+  paletteIndex: number;
+}): Promise<boolean> {
+  const row = await prisma.storyCategory.findUnique({
+    where: { id: opts.categoryId },
+    select: { imageKey: true },
+  });
+  if (row?.imageKey && isWebSeedKey(row.imageKey)) return false;
+  if (row?.imageKey) {
+    await removeStorageObject(row.imageKey);
+  }
+
+  const seed = `category-${opts.categoryId}-${opts.paletteIndex}`;
+  const storageKey = `categories/${opts.categoryId}/cover-seed-web-${randomUUID()}.jpg`;
+  const uploaded = await uploadSeedPhoto({
+    storageKey,
+    width: 960,
+    height: 540,
+    seed,
+    kind: "category",
+  });
+  if (!uploaded.ok) return false;
+
+  await prisma.storyCategory.update({
+    where: { id: opts.categoryId },
+    data: { imageKey: storageKey },
+  });
+  console.log("  + category cover (web)", opts.name);
   return true;
 }
 
@@ -897,6 +1163,72 @@ async function main() {
     if (ok) coverCount += 1;
   }
   console.log("  covers seeded/ensured this run:", coverCount);
+
+  // Category covers (Bergiliran + Menerima Kemenangan dan Kekalahan)
+  let categoryCoverCount = 0;
+  let catIdx = 0;
+  for (const [name, id] of categories) {
+    const ok = await ensureCategoryCover({
+      categoryId: id,
+      name,
+      paletteIndex: catIdx + 3,
+    });
+    if (ok) categoryCoverCount += 1;
+    catIdx += 1;
+  }
+  console.log("  category covers this run:", categoryCoverCount);
+
+  // Page illustrations + student portraits for published stories
+  const publishedPages = await prisma.storyPage.findMany({
+    where: { storyId: { in: published.map((s) => s.id) } },
+    orderBy: [{ storyId: "asc" }, { sortOrder: "asc" }],
+    select: {
+      id: true,
+      storyId: true,
+      sortOrder: true,
+      bodyText: true,
+      story: { select: { title: true } },
+    },
+  });
+
+  // Portrait: murid yang dipakai sesi terbuka di seed (6 pertama) — cukup uji /belajar.
+  const portraitStudents = students.slice(0, 6);
+
+  let illustrationCount = 0;
+  let portraitCount = 0;
+  for (let pi = 0; pi < publishedPages.length; pi++) {
+    const page = publishedPages[pi]!;
+    const illOk = await ensurePageIllustration({
+      storyId: page.storyId,
+      pageId: page.id,
+      createdById: admin.id,
+      paletteIndex: pi + 1,
+      label: `${page.story.title} h.${page.sortOrder}`,
+    });
+    if (illOk) illustrationCount += 1;
+
+    const portraitResults = await Promise.all(
+      portraitStudents.map((student, si) =>
+        ensurePagePortrait({
+          storyId: page.storyId,
+          pageId: page.id,
+          studentId: student.id,
+          studentName: student.displayName,
+          createdById: admin.id,
+          paletteIndex: pi + si + 2,
+        }),
+      ),
+    );
+    portraitCount += portraitResults.filter(Boolean).length;
+
+    if ((pi + 1) % 5 === 0 || pi === publishedPages.length - 1) {
+      console.log(
+        `  … media pages ${pi + 1}/${publishedPages.length} (illust+${illustrationCount}, port+${portraitCount})`,
+      );
+    }
+  }
+  console.log("  page illustrations this run:", illustrationCount);
+  console.log("  page portraits this run:", portraitCount);
 
   // Many sessions across students / therapists / parents
   let sessionCount = 0;

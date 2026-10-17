@@ -240,6 +240,8 @@ model StoryCategory {
   description String?
   sortOrder   Int     @default(0)
   isActive    Boolean @default(true)
+  /// Private Storage key in bucket cermin-media (categories/…). Cover kartu pilih kategori.
+  imageKey    String?
   stories     Story[]
 
   @@map("story_categories")

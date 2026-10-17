@@ -38,6 +38,7 @@ type CategoryCard = {
   name: string;
   description: string | null;
   storyCount: number;
+  coverUrl: string | null;
 };
 
 function isWizardStep(value: string | null): value is WizardStep {
@@ -221,6 +222,7 @@ export function SessionStartFlow({
         name: s.categoryName,
         description: s.categoryDescription,
         storyCount: 1,
+        coverUrl: s.categoryCoverUrl,
       });
     }
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
@@ -367,29 +369,38 @@ export function SessionStartFlow({
                     }
                     className="group flex min-h-[14rem] w-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-[var(--cermin-border,#d9e2ec)] bg-white text-left shadow-[0_10px_28px_-18px_color-mix(in_srgb,var(--cermin-accent,#3d7c6b)_35%,transparent)] transition-[border-color,box-shadow,transform] duration-200 hover:border-[var(--cermin-accent,#3d7c6b)] hover:shadow-[0_14px_32px_-16px_color-mix(in_srgb,var(--cermin-accent,#3d7c6b)_40%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2 active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-[17rem] md:min-h-[19rem]"
                   >
-                    <div className="flex items-center gap-2 border-b border-[var(--cermin-border,#d9e2ec)]/70 bg-[var(--accent-soft,#e6f2ee)]/70 px-4 py-4 sm:gap-4 sm:px-7 sm:py-6">
-                      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-[var(--cermin-accent,#3d7c6b)] shadow-sm sm:size-14">
-                        <BookOpen className="size-5 sm:size-7" aria-hidden />
-                      </span>
-                      <span className="min-w-0 flex-1 text-xl font-semibold leading-snug text-[var(--text,#1f2933)] sm:text-3xl">
-                        {cat.name}
-                      </span>
-                      <ChevronRight
-                        className="size-5 shrink-0 text-[var(--cermin-muted,#5c6b73)] transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--cermin-accent,#3d7c6b)] motion-reduce:transition-none motion-reduce:group-hover:translate-x-0 sm:size-7"
-                        aria-hidden
-                      />
-                    </div>
-                    <div className="flex flex-1 flex-col gap-3 px-4 py-4 sm:gap-5 sm:px-7 sm:py-6">
-                      {cat.description?.trim() ? (
-                        <span className="text-sm leading-relaxed text-[var(--cermin-muted,#5c6b73)] line-clamp-4 sm:text-xl">
-                          {excerpt(cat.description, 220)}
-                        </span>
+                    <div className="relative h-28 w-full shrink-0 overflow-hidden border-b border-[var(--cermin-border,#d9e2ec)]/70 bg-[var(--accent-soft,#e6f2ee)]/60 sm:h-36 md:h-44">
+                      {cat.coverUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- signed URL TTL pendek
+                        <img
+                          src={cat.coverUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
-                        <span className="text-sm text-[var(--cermin-muted,#5c6b73)] sm:text-lg">
-                          Kumpulan cerita sosial untuk topik ini.
-                        </span>
+                        <div className="flex h-full items-center justify-center">
+                          <span className="flex size-12 items-center justify-center rounded-xl bg-white text-[var(--cermin-accent,#3d7c6b)] shadow-sm sm:size-14">
+                            <BookOpen className="size-6 sm:size-7" aria-hidden />
+                          </span>
+                        </div>
                       )}
-                      <span className="mt-auto inline-flex w-fit items-center rounded-full bg-[var(--accent-soft,#e6f2ee)] px-3.5 py-1.5 text-sm font-medium text-[var(--cermin-accent,#3d7c6b)] sm:px-4 sm:text-lg">
+                    </div>
+                    <div className="flex flex-1 flex-col gap-2 px-4 py-4 sm:gap-3 sm:px-7 sm:py-5">
+                      <div className="flex items-start gap-2">
+                        <span className="min-w-0 flex-1 text-xl font-semibold leading-snug text-[var(--text,#1f2933)] sm:text-2xl md:text-3xl">
+                          {cat.name}
+                        </span>
+                        <ChevronRight
+                          className="mt-1 size-5 shrink-0 text-[var(--cermin-muted,#5c6b73)] transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--cermin-accent,#3d7c6b)] motion-reduce:transition-none motion-reduce:group-hover:translate-x-0 sm:size-6"
+                          aria-hidden
+                        />
+                      </div>
+                      {cat.description?.trim() ? (
+                        <span className="text-sm leading-relaxed text-[var(--cermin-muted,#5c6b73)] line-clamp-3 sm:text-lg">
+                          {excerpt(cat.description, 180)}
+                        </span>
+                      ) : null}
+                      <span className="mt-auto inline-flex w-fit items-center rounded-full bg-[var(--accent-soft,#e6f2ee)] px-3.5 py-1.5 text-sm font-medium text-[var(--cermin-accent,#3d7c6b)] sm:px-4 sm:text-base">
                         {cat.storyCount} cerita
                       </span>
                     </div>

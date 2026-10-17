@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { SesiCalmBackdrop } from "./sesi-calm-backdrop";
+import { CalmSenseBackdrop } from "@/components/calm/calm-sense-backdrop";
 
 /** Full-bleed start flow — tanpa sidebar/topbar dashboard. */
 export default function SesiFullscreenLayout({
@@ -9,7 +9,7 @@ export default function SesiFullscreenLayout({
 }) {
   return (
     <div className="relative min-h-dvh overflow-x-hidden bg-[var(--bg,#f7f4ef)] text-[var(--text,#1f2933)]">
-      <SesiCalmBackdrop />
+      <CalmSenseBackdrop variant="sesi" />
       <div className="relative z-10">{children}</div>
     </div>
   );

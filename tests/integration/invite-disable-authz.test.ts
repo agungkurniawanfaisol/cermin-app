@@ -20,13 +20,13 @@ vi.mock("@/lib/audit", () => ({
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
-  checkRateLimit: (key: string, limit?: number, windowMs?: number) =>
+  checkRateLimit: (key: string, limit: number, windowMs: number) =>
     checkRateLimit(key, limit, windowMs),
   RATE_LIMIT_MESSAGE: "Terlalu banyak percobaan. Coba lagi nanti.",
 }));
 
 vi.mock("@/lib/request-ip", () => ({
-  getRequestIp: () => getRequestIp(),
+  getRequestIp: async () => getRequestIp(),
 }));
 
 vi.mock("@/lib/db", () => ({

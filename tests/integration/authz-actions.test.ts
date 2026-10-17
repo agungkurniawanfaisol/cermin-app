@@ -71,7 +71,9 @@ describe("authz Server Actions (I2, I6 + audit)", () => {
     requireRole.mockRejectedValue(new AuthzError());
     const { createStudent } = await import("@/server/actions/students");
 
-    const result = await createStudent({ displayName: "Alya" });
+    const result = await createStudent({
+      displayName: "Alya",
+    } as Parameters<typeof createStudent>[0]);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe("Tidak diizinkan");
@@ -93,7 +95,9 @@ describe("authz Server Actions (I2, I6 + audit)", () => {
     });
 
     const { createStudent } = await import("@/server/actions/students");
-    const result = await createStudent({ displayName: "Alya" });
+    const result = await createStudent({
+      displayName: "Alya",
+    } as Parameters<typeof createStudent>[0]);
 
     expect(result).toEqual({ ok: true, data: { id: "student-1" } });
     expect(studentCreate).toHaveBeenCalledTimes(1);

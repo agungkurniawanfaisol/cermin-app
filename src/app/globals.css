@@ -296,10 +296,11 @@
 
 /*
   Child mode /belajar — autism-friendly:
-  soft flat ground, clear white “page” figure, no pattern/noise.
+  soft sage/cream ground (CalmSenseBackdrop), clear white page cards,
+  no dense pattern, no motion decoration.
 */
 .belajar-root {
-  --belajar-ground: #eef3f0;
+  --belajar-ground: #f3f6f3;
   --belajar-page: #ffffff;
   --belajar-ink: #1f2933;
   --belajar-quiet: #5c6b73;
@@ -404,8 +405,9 @@
   flex-shrink: 0;
   z-index: 20;
   padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
-  background-color: color-mix(in srgb, var(--belajar-ground) 92%, white);
+  background-color: color-mix(in srgb, var(--belajar-page) 88%, var(--belajar-ground));
   border-top: 1px solid var(--belajar-line);
+  backdrop-filter: blur(2px);
 }
 
 /* Landscape pendek: padatkan chrome agar stage muat tanpa scroll dokumen */
@@ -443,7 +445,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(10rem, 32dvh, 18rem);
+  min-height: clamp(14rem, 48dvh, 28rem);
   background-color: var(--belajar-page);
   border: 2px solid var(--belajar-line);
   border-radius: 1.25rem;
@@ -471,5 +473,5 @@
 
 .belajar-adult {
   border-top: 2px dashed var(--belajar-line);
-  background-color: color-mix(in srgb, var(--belajar-ground) 85%, #d9e2ec);
+  background-color: color-mix(in srgb, var(--belajar-page) 70%, var(--belajar-ground));
 }

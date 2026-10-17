@@ -13,6 +13,7 @@ import { revalidatePath } from "next/cache";
 import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import { createCategoryCoverSignedUrl } from "@/lib/category-storage";
 import {
   resolveStoryCoverMediaId,
   storyCoverMediaWhere,
@@ -74,6 +75,8 @@ export type PublishedStoryOption = {
   categoryId: string;
   categoryName: string;
   categoryDescription: string | null;
+  /** Signed URL cover kategori (TTL pendek); null jika belum diunggah. */
+  categoryCoverUrl: string | null;
   pageCount: number;
   /** Cover: prefer IMAGE story-level (pageId null); fallback halaman shared. */
   coverMediaId: string | null;
@@ -94,7 +97,9 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
       title: true,
       description: true,
       categoryId: true,
-      category: { select: { name: true, description: true } },
+      category: {
+        select: { name: true, description: true, imageKey: true },
+      },
       _count: { select: { pages: true } },
       media: {
         where: storyCoverMediaWhere,
@@ -116,6 +121,20 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
     },
   });
 
+  const coverByCategory = new Map<string, string | null>();
+  await Promise.all(
+    [...new Set(stories.map((s) => s.categoryId))].map(async (categoryId) => {
+      const key = stories.find((s) => s.categoryId === categoryId)?.category
+        .imageKey;
+      if (!key) {
+        coverByCategory.set(categoryId, null);
+        return;
+      }
+      const signed = await createCategoryCoverSignedUrl(key);
+      coverByCategory.set(categoryId, signed.ok ? signed.url : null);
+    }),
+  );
+
   return stories.map((story) => ({
     id: story.id,
     title: story.title,
@@ -123,6 +142,7 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
     categoryId: story.categoryId,
     categoryName: story.category.name,
     categoryDescription: story.category.description,
+    categoryCoverUrl: coverByCategory.get(story.categoryId) ?? null,
     pageCount: story._count.pages,
     coverMediaId: resolveStoryCoverMediaId({
       storyLevelCoverId: story.media[0]?.id,

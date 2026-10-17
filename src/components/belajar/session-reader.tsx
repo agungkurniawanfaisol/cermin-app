@@ -51,11 +51,15 @@ function StoryPageSlide({
   bodyClass: string;
   showAudio: boolean;
 }) {
+  const hasStoryMedia =
+    page.storyImages.length > 0 ||
+    (showAudio && page.storyAudios.length > 0);
+
   return (
     <article className="belajar-book__page" aria-label="Halaman cerita">
-      <div className="flex flex-col gap-4 px-4 pb-4 pt-1 sm:gap-5 sm:px-6 md:px-8 lg:px-10">
-        <div className="grid gap-4 md:grid-cols-2 md:items-stretch md:gap-6">
-          <div className="belajar-portrait p-3 sm:p-4">
+      <div className="flex flex-col gap-3 px-3 pb-3 pt-1 sm:gap-4 sm:px-5 md:px-8 lg:px-10">
+        <div className="grid gap-3 md:grid-cols-2 md:items-stretch md:gap-5">
+          <div className="belajar-portrait p-2 sm:p-3">
             {page.portraitImage ? (
               <PageImage
                 key={`${page.portraitImage.id}-${studentId}`}
@@ -72,7 +76,7 @@ function StoryPageSlide({
             )}
           </div>
 
-          <div className="belajar-page-card flex flex-col justify-center gap-4 p-4 sm:p-5 md:p-6">
+          <div className="belajar-page-card flex flex-col justify-center gap-3 p-4 sm:p-5 md:p-6">
             <p
               className={`whitespace-pre-wrap text-[var(--belajar-ink,#1f2933)] ${bodyClass}`}
             >
@@ -83,20 +87,16 @@ function StoryPageSlide({
           </div>
         </div>
 
-        {(showAudio && page.storyAudios.length > 0) ||
-        page.storyImages.length > 0 ? (
-          <div className="belajar-page-card space-y-4 p-4 sm:p-5">
-            <p className="text-sm font-semibold tracking-wide text-[var(--belajar-quiet,#5c6b73)] uppercase">
-              Cerita
-            </p>
+        {hasStoryMedia ? (
+          <div className="belajar-page-card space-y-3 p-3 sm:p-4">
+            {page.storyImages.map((image) => (
+              <PageImage key={image.id} image={image} variant="story" />
+            ))}
             {showAudio
               ? page.storyAudios.map((audio) => (
                   <PageAudioButton key={audio.id} audio={audio} />
                 ))
               : null}
-            {page.storyImages.map((image) => (
-              <PageImage key={image.id} image={image} variant="story" />
-            ))}
           </div>
         ) : null}
       </div>
@@ -271,31 +271,21 @@ export function SessionReader({ session }: { session: SessionForReader }) {
   return (
     <main className="w-full">
       <div className="belajar-stage w-full">
-        <header className="belajar-stage__header shrink-0 space-y-2 px-4 pt-3 sm:space-y-3 sm:px-6 sm:pt-4 md:px-8 lg:px-10">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-md bg-[var(--belajar-accent-soft,#e6f2ee)] px-2.5 py-1 text-xs font-semibold tracking-wide text-[var(--belajar-accent,#3d7c6b)] uppercase sm:text-sm">
-                  {session.story.categoryName}
-                </span>
-                <span className="text-xs text-[var(--belajar-quiet,#5c6b73)] sm:text-sm">
-                  · Cerita Sosial
-                </span>
-              </div>
-              <h1 className="mt-0.5 truncate text-xl font-semibold text-[var(--belajar-ink,#1f2933)] sm:text-2xl md:text-3xl">
+        <header className="belajar-stage__header shrink-0 space-y-1.5 px-3 pt-2 sm:px-5 sm:pt-3 md:px-8 lg:px-10">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-[var(--belajar-quiet,#5c6b73)]">
+                {session.story.categoryName}
+              </p>
+              <h1 className="truncate text-lg font-semibold text-[var(--belajar-ink,#1f2933)] sm:text-xl md:text-2xl">
                 {session.story.title}
               </h1>
-              {ended ? (
-                <p className="mt-1 text-base text-[var(--belajar-quiet,#5c6b73)]">
-                  Bersama {session.student.displayName} · Sesi selesai
-                </p>
-              ) : null}
             </div>
             <p
-              className="shrink-0 rounded-full bg-[var(--belajar-accent-soft,#e6f2ee)] px-3 py-1 text-sm font-semibold text-[var(--belajar-accent,#3d7c6b)] sm:text-base"
+              className="shrink-0 rounded-full bg-[var(--belajar-accent-soft,#e6f2ee)] px-2.5 py-0.5 text-sm font-semibold text-[var(--belajar-accent,#3d7c6b)]"
               aria-live="polite"
             >
-              Halaman {pageIndex + 1} dari {total}
+              {pageIndex + 1}/{total}
             </p>
           </div>
           <div
@@ -311,12 +301,12 @@ export function SessionReader({ session }: { session: SessionForReader }) {
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <div className="max-w-xl space-y-2">
+          <div className="flex max-w-md items-center gap-2">
             <label
               htmlFor="belajar-student"
-              className="block text-sm font-semibold text-[var(--belajar-quiet,#5c6b73)] sm:text-base"
+              className="shrink-0 text-sm font-medium text-[var(--belajar-quiet,#5c6b73)]"
             >
-              Nama murid
+              Murid
             </label>
             <select
               id="belajar-student"
@@ -325,7 +315,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
                 ended || studentPending || session.studentOptions.length === 0
               }
               onChange={(e) => onChangeStudent(e.target.value)}
-              className="min-h-12 w-full rounded-xl border-2 border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] px-3 text-lg font-semibold text-[var(--belajar-ink,#1f2933)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60 sm:min-h-14 sm:rounded-2xl sm:px-4 sm:text-xl"
+              className="min-h-11 w-full rounded-lg border border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] px-2.5 text-base font-semibold text-[var(--belajar-ink,#1f2933)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
             >
               {session.studentOptions.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -334,17 +324,11 @@ export function SessionReader({ session }: { session: SessionForReader }) {
               ))}
             </select>
             {studentPending ? (
-              <p
-                className="text-sm text-[var(--belajar-quiet,#5c6b73)]"
-                role="status"
-              >
+              <span className="sr-only" role="status">
                 Mengganti murid…
-              </p>
+              </span>
             ) : null}
           </div>
-          <p className="text-sm text-[var(--belajar-quiet,#5c6b73)] sm:text-base">
-            Geser ke samping seperti membuka buku, atau pakai tombol di bawah.
-          </p>
         </header>
 
         <div
