@@ -40,6 +40,13 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+function resolvePortrait(
+  page: SessionReaderPage,
+  studentId: string,
+): SessionReaderPage["portraitImage"] {
+  return page.portraitsByStudentId[studentId] ?? null;
+}
+
 function StoryPageSlide({
   page,
   studentId,
@@ -51,6 +58,7 @@ function StoryPageSlide({
   bodyClass: string;
   showAudio: boolean;
 }) {
+  const portrait = resolvePortrait(page, studentId);
   const hasStoryMedia =
     page.storyImages.length > 0 ||
     (showAudio && page.storyAudios.length > 0);
@@ -60,10 +68,10 @@ function StoryPageSlide({
       <div className="flex flex-col gap-3 px-3 pb-3 pt-1 sm:gap-4 sm:px-5 md:px-8 lg:px-10">
         <div className="grid gap-3 md:grid-cols-2 md:items-stretch md:gap-5">
           <div className="belajar-portrait p-2 sm:p-3">
-            {page.portraitImage ? (
+            {portrait ? (
               <PageImage
-                key={`${page.portraitImage.id}-${studentId}`}
-                image={page.portraitImage}
+                key={`${portrait.id}-${studentId}`}
+                image={portrait}
                 variant="portrait"
               />
             ) : (
@@ -116,6 +124,8 @@ export function SessionReader({ session }: { session: SessionForReader }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [studentPending, startStudentTransition] = useTransition();
+  /** Lokal dulu — ganti nama instan tanpa tunggu router.refresh. */
+  const [studentId, setStudentId] = useState(session.student.id);
   const ended = Boolean(session.endedAt);
   const adultRef = useRef<HTMLDivElement>(null);
 
@@ -124,6 +134,10 @@ export function SessionReader({ session }: { session: SessionForReader }) {
   const bodyClass = TEXT_SIZE_CLASS[session.preference.textSize];
   const showAudio = session.preference.audioEnabled;
   const progressPct = total > 0 ? ((pageIndex + 1) / total) * 100 : 0;
+
+  useEffect(() => {
+    setStudentId(session.student.id);
+  }, [session.student.id]);
 
   useEffect(() => {
     pageIndexRef.current = pageIndex;
@@ -221,19 +235,21 @@ export function SessionReader({ session }: { session: SessionForReader }) {
     return () => window.removeEventListener("resize", onResize);
   }, [pageIndex]);
 
-  function onChangeStudent(studentId: string) {
-    if (studentId === session.student.id || ended) return;
+  function onChangeStudent(nextStudentId: string) {
+    if (nextStudentId === studentId || ended) return;
+    const previousId = studentId;
     setError(null);
+    setStudentId(nextStudentId);
     startStudentTransition(async () => {
       const result = await updateSessionStudent({
         sessionId: session.id,
-        studentId,
+        studentId: nextStudentId,
       });
       if (!result.ok) {
+        setStudentId(previousId);
         setError(result.error);
-        return;
       }
-      router.refresh();
+      // Tanpa router.refresh — foto sudah dari portraitsByStudentId lokal.
     });
   }
 
@@ -310,10 +326,8 @@ export function SessionReader({ session }: { session: SessionForReader }) {
             </label>
             <select
               id="belajar-student"
-              value={session.student.id}
-              disabled={
-                ended || studentPending || session.studentOptions.length === 0
-              }
+              value={studentId}
+              disabled={ended || session.studentOptions.length === 0}
               onChange={(e) => onChangeStudent(e.target.value)}
               className="min-h-11 w-full rounded-lg border border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] px-2.5 text-base font-semibold text-[var(--belajar-ink,#1f2933)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
             >
@@ -325,7 +339,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
             </select>
             {studentPending ? (
               <span className="sr-only" role="status">
-                Mengganti murid…
+                Menyimpan nama murid…
               </span>
             ) : null}
           </div>
@@ -345,7 +359,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
             <StoryPageSlide
               key={page.id}
               page={page}
-              studentId={session.student.id}
+              studentId={studentId}
               bodyClass={bodyClass}
               showAudio={showAudio}
             />

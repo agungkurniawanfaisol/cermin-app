@@ -428,8 +428,13 @@ export type SessionReaderPage = {
   id: string;
   sortOrder: number;
   bodyText: string;
-  /** Foto murid personalisasi (MediaAsset.studentId = murid sesi). Null jika belum diunggah. */
+  /** Foto murid personalisasi untuk murid sesi saat ini. */
   portraitImage: SessionMediaRef | null;
+  /**
+   * Foto personalisasi per murid (ganti nama tanpa refresh penuh).
+   * URL boleh null — klien ambil signed URL via /api/media/[id].
+   */
+  portraitsByStudentId: Record<string, SessionMediaRef>;
   /** Ilustrasi umum admin (studentId null). */
   storyImages: SessionMediaRef[];
   /** Audio narasi umum (studentId null). */
@@ -642,11 +647,31 @@ export async function getSessionForReader(
       const sharedAudio = page.media.filter(
         (m) => m.kind === MediaKind.AUDIO && m.studentId == null,
       );
+
+      const portraitsByStudentId: Record<string, SessionMediaRef> = {};
+      for (const img of imagesAll) {
+        if (img.studentId == null) continue;
+        const existing = portraitsByStudentId[img.studentId];
+        if (!existing || img.sortOrder < existing.sortOrder) {
+          // Jangan pre-sign semua murid — hemat round-trip; ganti murid = fetch on demand.
+          portraitsByStudentId[img.studentId] = {
+            id: img.id,
+            altText: img.altText,
+            sortOrder: img.sortOrder,
+            url:
+              img.studentId === studentId
+                ? (signedUrlMap.get(img.id) ?? null)
+                : null,
+          };
+        }
+      }
+
       return {
         id: page.id,
         sortOrder: page.sortOrder,
         bodyText: page.bodyText,
         portraitImage: personalized[0] ? toRef(personalized[0]) : null,
+        portraitsByStudentId,
         storyImages: shared.map(toRef),
         storyAudios: sharedAudio.map(toRef),
       };
@@ -692,15 +717,16 @@ export async function updateSessionStudent(
       };
     }
 
-    await assertCanLeadSession(user, parsed.data.studentId);
-
-    const student = await prisma.student.findFirst({
-      where: {
-        id: parsed.data.studentId,
-        status: StudentStatus.ACTIVE,
-      },
-      select: { id: true },
-    });
+    const [, student] = await Promise.all([
+      assertCanLeadSession(user, parsed.data.studentId),
+      prisma.student.findFirst({
+        where: {
+          id: parsed.data.studentId,
+          status: StudentStatus.ACTIVE,
+        },
+        select: { id: true },
+      }),
+    ]);
     if (!student) {
       return { ok: false, error: "Murid tidak ditemukan atau tidak aktif" };
     }
@@ -710,7 +736,8 @@ export async function updateSessionStudent(
       data: { studentId: parsed.data.studentId },
     });
 
-    await writeAudit({
+    // Audit + revalidate dasbor di background — UI belajar sudah update lokal.
+    void writeAudit({
       actorId: user.id,
       action: "session.student.change",
       entityType: "LearningSession",
@@ -720,9 +747,8 @@ export async function updateSessionStudent(
         toStudentId: parsed.data.studentId,
       },
     });
-
-    revalidatePath(`/belajar/${session.id}`);
     revalidatePath("/dashboard/sesi");
+
     return {
       ok: true,
       data: { sessionId: session.id, studentId: parsed.data.studentId },
