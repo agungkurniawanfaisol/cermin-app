@@ -17,7 +17,9 @@ const globalForPrisma = globalThis as unknown as {
 function createPool(): Pool {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL is not set");
+    throw new Error(
+      "DATABASE_URL is not set. Set it in Vercel → Settings → Environment Variables.",
+    );
   }
   return new Pool({
     connectionString,
@@ -56,4 +58,14 @@ function getPrismaClient(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
-export const prisma = getPrismaClient();
+/**
+ * Lazy proxy — jangan init pool saat import modul.
+ * Next/Vercel "Collecting page data" mengimpor route handlers tanpa DATABASE_URL.
+ */
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, prop, receiver);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
