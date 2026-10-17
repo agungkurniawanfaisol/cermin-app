@@ -7,13 +7,17 @@ type Props = {
 };
 
 /**
- * Strip kontak lembaga di awal landing — nama, alamat, sosial.
- * Selalu tampil; isi dari Pengaturan Admin.
+ * Strip kontak lembaga di bawah header — hanya jika ada data dari Pengaturan.
+ * Kosong → tidak dirender (hindari CERMIN dobel dengan LandingHeader).
  */
 export function LandingInstitutionBar({ branding }: Props) {
-  const displayName = branding.name?.trim() || "CERMIN";
+  const name = branding.name?.trim() || null;
   const address = branding.address?.trim() || null;
   const social = buildBrandingSocial(branding);
+
+  if (!name && !address && social.length === 0) {
+    return null;
+  }
 
   return (
     <aside
@@ -22,18 +26,16 @@ export function LandingInstitutionBar({ branding }: Props) {
     >
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-8 sm:py-5 md:flex-row md:items-start md:justify-between md:gap-8">
         <div className="min-w-0 space-y-1.5">
-          <p className="text-base font-semibold text-[var(--cermin-accent)]">
-            {displayName}
-          </p>
-          {branding.name?.trim() ? (
-            <p className="text-sm text-[var(--cermin-muted)]">
-              CERMIN · CERita MIRip Aku
-            </p>
-          ) : (
-            <p className="text-sm text-[var(--cermin-muted)]">
-              CERita MIRip Aku — cerita sosial tenang
-            </p>
-          )}
+          {name ? (
+            <>
+              <p className="text-base font-semibold text-[var(--cermin-accent)]">
+                {name}
+              </p>
+              <p className="text-sm text-[var(--cermin-muted)]">
+                CERMIN · CERita MIRip Aku
+              </p>
+            </>
+          ) : null}
           {address ? (
             <p className="flex gap-2 text-sm leading-relaxed text-[var(--text)]">
               <MapPin
