@@ -327,11 +327,26 @@
   max-height: 100svh;
 }
 
+/* Scrollbar tersembunyi, area tetap bisa digeser (halus). */
+.belajar-root,
+.belajar-root * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.belajar-root::-webkit-scrollbar,
+.belajar-root *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 .belajar-stage__scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
 }
@@ -348,7 +363,6 @@
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  scrollbar-width: none;
   /* Prioritas geser samping; scroll vertikal tetap di dalam halaman */
   touch-action: pan-x;
   cursor: grab;
@@ -357,10 +371,6 @@
 
 .belajar-book:active {
   cursor: grabbing;
-}
-
-.belajar-book::-webkit-scrollbar {
-  display: none;
 }
 
 .belajar-book__page {
@@ -373,6 +383,7 @@
   overflow-y: auto;
   scroll-snap-align: start;
   scroll-snap-stop: always;
+  scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   /* Izinkan scroll vertikal konten tanpa memblokir swipe horizontal di parent */
@@ -396,7 +407,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .belajar-book {
+  .belajar-book,
+  .belajar-book__page,
+  .belajar-stage__scroll {
     scroll-behavior: auto;
   }
 }
