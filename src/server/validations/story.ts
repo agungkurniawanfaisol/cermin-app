@@ -72,6 +72,52 @@ export const transitionStoryStatusSchema = z.object({
   }),
 });
 
+export const restoreStoryVersionSchema = z.object({
+  storyId: z.string().uuid("ID cerita tidak valid"),
+  versionId: z.string().uuid("ID versi tidak valid"),
+});
+
+const snapshotMcqSchema = z.object({
+  prompt: z.string(),
+  promptImageKey: z.string().nullable(),
+  correctKey: z.string().min(1),
+  choices: z.array(
+    z.object({
+      key: z.string().min(1),
+      labelText: z.string(),
+      imageKey: z.string().nullable(),
+    }),
+  ),
+});
+
+export const publishSnapshotSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  learningObjectives: z.string(),
+  pages: z.array(
+    z.object({
+      id: z.string().uuid(),
+      sortOrder: z.number().int(),
+      title: z.string(),
+      bodyText: z.string(),
+      media: z
+        .array(
+          z.object({
+            id: z.string().uuid(),
+            kind: z.string(),
+            mimeType: z.string(),
+            altText: z.string().nullable(),
+            sortOrder: z.number().int(),
+            storageKey: z.string(),
+          }),
+        )
+        .optional()
+        .default([]),
+      mcq: snapshotMcqSchema.nullable().optional().default(null),
+    }),
+  ),
+});
+
 export type CreateStoryInput = z.infer<typeof createStorySchema>;
 export type UpdateStoryInput = z.infer<typeof updateStorySchema>;
 export type CreatePageInput = z.infer<typeof createPageSchema>;
@@ -79,4 +125,7 @@ export type UpdatePageInput = z.infer<typeof updatePageSchema>;
 export type ReorderPagesInput = z.infer<typeof reorderPagesSchema>;
 export type TransitionStoryStatusInput = z.infer<
   typeof transitionStoryStatusSchema
+>;
+export type RestoreStoryVersionInput = z.infer<
+  typeof restoreStoryVersionSchema
 >;

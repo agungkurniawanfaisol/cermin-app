@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ChevronDown, ImageIcon, Mic, Type, UserRound } from "lucide-react";
+import {
+  ChevronDown,
+  CircleHelp,
+  ImageIcon,
+  Mic,
+  Type,
+  UserRound,
+} from "lucide-react";
 import {
   createStoryPage,
   deleteStoryPage,
@@ -25,6 +32,7 @@ import {
   type PageMediaUploaderHandle,
   type StudentOption,
 } from "./page-media-uploader";
+import { PageMcqEditor, type PageMcqSeed } from "./page-mcq-editor";
 
 type PageItem = {
   id: string;
@@ -32,11 +40,12 @@ type PageItem = {
   title: string;
   bodyText: string;
   media: PageMediaItem[];
+  mcq: PageMcqSeed;
 };
 
 type PageDraft = { title: string; bodyText: string };
 
-type PageTab = "teks" | "foto" | "ilustrasi" | "tambahan";
+type PageTab = "teks" | "foto" | "ilustrasi" | "tambahan" | "soal";
 
 type EditorCache = {
   pages: PageItem[];
@@ -80,6 +89,12 @@ const PAGE_TABS: Array<{
     icon: Mic,
     mediaFocus: "extra",
   },
+  {
+    value: "soal",
+    label: "Soal",
+    short: "Soal",
+    icon: CircleHelp,
+  },
 ];
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -108,6 +123,17 @@ function normalizeDraft(
   return { title: fallback.title ?? "", bodyText: fallback.bodyText ?? "" };
 }
 
+/** Gabung media lokal + server by id (lokal menang jika id sama). */
+function mergeMedia(
+  local: PageMediaItem[],
+  server: PageMediaItem[],
+): PageMediaItem[] {
+  const byId = new Map<string, PageMediaItem>();
+  for (const m of server) byId.set(m.id, m);
+  for (const m of local) byId.set(m.id, m);
+  return [...byId.values()].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 /** Gabung server + lokal: jangan buang item lokal; hormati hapus yang sudah di server. */
 function mergePages(
   local: PageItem[],
@@ -130,8 +156,8 @@ function mergePages(
       ...sp,
       title: existing.title,
       bodyText: existing.bodyText,
-      media:
-        existing.media.length >= sp.media.length ? existing.media : sp.media,
+      media: mergeMedia(existing.media, sp.media),
+      mcq: existing.mcq ?? sp.mcq,
     });
   }
 
@@ -176,7 +202,9 @@ function hydrateFromCache(
 }
 
 function pagesSignature(pages: PageItem[]): string {
-  return pages.map((p) => `${p.id}:${p.media.length}`).join("|");
+  return pages
+    .map((p) => `${p.id}:${p.media.map((m) => m.id).join(",")}`)
+    .join("|");
 }
 
 function isPageTab(value: string): value is PageTab {
@@ -184,7 +212,8 @@ function isPageTab(value: string): value is PageTab {
     value === "teks" ||
     value === "foto" ||
     value === "ilustrasi" ||
-    value === "tambahan"
+    value === "tambahan" ||
+    value === "soal"
   );
 }
 
@@ -329,6 +358,7 @@ export function PagesEditor({
             title: "",
             bodyText: "",
             media: [] as PageMediaItem[],
+            mcq: null,
           },
         ];
       });
@@ -349,6 +379,15 @@ export function PagesEditor({
     setError(null);
     startTransition(async () => {
       const draft = drafts[pageId] ?? { title: "", bodyText: "" };
+
+      // Unggah dulu (file di state React) sebelum update teks —
+      // server action teks tidak boleh mendahului agar file pending tidak hilang.
+      const uploadResult = await mediaRefs.current[pageId]?.uploadPending();
+      if (uploadResult?.error) {
+        setError(uploadResult.error);
+        return;
+      }
+
       const result = await updateStoryPage({
         pageId,
         title: draft.title,
@@ -358,15 +397,16 @@ export function PagesEditor({
         setError(result.error);
         return;
       }
-      const uploadResult = await mediaRefs.current[pageId]?.uploadPending();
-      if (uploadResult?.error) {
-        setError(uploadResult.error);
-        return;
-      }
+
       setPages((prev) =>
         prev.map((p) =>
           p.id === pageId
-            ? { ...p, title: draft.title, bodyText: draft.bodyText }
+            ? {
+                ...p,
+                title: draft.title,
+                bodyText: draft.bodyText,
+                media: uploadResult?.media ?? p.media,
+              }
             : p,
         ),
       );
@@ -435,8 +475,8 @@ export function PagesEditor({
             Halaman cerita
           </h2>
           <p className="mt-1 text-sm text-[var(--cermin-muted,#5c6b73)]">
-            Per halaman: teks, foto murid, ilustrasi, lalu audio &amp; tambahan.
-            Satu tombol Simpan mengunggah semua file yang sudah dipilih.
+            Per halaman: teks, foto murid, ilustrasi, audio, dan opsional soal
+            (jumlah opsi bebas). Satu tombol Simpan mengunggah media yang sudah dipilih.
           </p>
         </div>
         {!readOnly ? (
@@ -648,11 +688,32 @@ export function PagesEditor({
                     <TabsContent value="foto" className="sr-only" />
                     <TabsContent value="ilustrasi" className="sr-only" />
                     <TabsContent value="tambahan" className="sr-only" />
+
+                    <TabsContent
+                      value="soal"
+                      className="mt-1 outline-none"
+                    >
+                      <PageMcqEditor
+                        pageId={page.id}
+                        seed={page.mcq}
+                        readOnly={readOnly}
+                        onChanged={(mcq) =>
+                          setPages((prev) =>
+                            prev.map((p) =>
+                              p.id === page.id ? { ...p, mcq } : p,
+                            ),
+                          )
+                        }
+                      />
+                    </TabsContent>
                   </Tabs>
 
                   <div
-                    className={cx("mt-4", activeTab === "teks" && "hidden")}
-                    aria-hidden={activeTab === "teks"}
+                    className={cx(
+                      "mt-4",
+                      (activeTab === "teks" || activeTab === "soal") && "hidden",
+                    )}
+                    aria-hidden={activeTab === "teks" || activeTab === "soal"}
                   >
                     <PageMediaUploader
                       ref={(handle) => {

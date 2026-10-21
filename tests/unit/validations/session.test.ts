@@ -31,6 +31,7 @@ describe("addObservationSchema", () => {
   it("rejects blank note", () => {
     const result = addObservationSchema.safeParse({
       sessionId: SESSION_ID,
+      studentId: STUDENT_ID,
       note: "   ",
     });
     expect(result.success).toBe(false);
@@ -39,12 +40,21 @@ describe("addObservationSchema", () => {
   it("trims note", () => {
     const result = addObservationSchema.safeParse({
       sessionId: SESSION_ID,
+      studentId: STUDENT_ID,
       note: "  fokus baik  ",
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.note).toBe("fokus baik");
     }
+  });
+
+  it("rejects missing studentId", () => {
+    const result = addObservationSchema.safeParse({
+      sessionId: SESSION_ID,
+      note: "fokus baik",
+    });
+    expect(result.success).toBe(false);
   });
 });
 

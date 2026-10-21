@@ -20,6 +20,7 @@ const storyFindMany = vi.fn();
 const mediaAssetAggregate = vi.fn();
 const mediaAssetCreate = vi.fn();
 const mediaAssetFindUnique = vi.fn();
+const mediaAssetFindMany = vi.fn();
 const mediaAssetDelete = vi.fn();
 const learningSessionFindUnique = vi.fn();
 const sessionObservationFindMany = vi.fn();
@@ -66,6 +67,7 @@ vi.mock("@/lib/db", () => ({
       aggregate: (...args: unknown[]) => mediaAssetAggregate(...args),
       create: (...args: unknown[]) => mediaAssetCreate(...args),
       findUnique: (...args: unknown[]) => mediaAssetFindUnique(...args),
+      findMany: (...args: unknown[]) => mediaAssetFindMany(...args),
       delete: (...args: unknown[]) => mediaAssetDelete(...args),
     },
     learningSession: {
@@ -287,6 +289,7 @@ describe("getSessionForReader personalized image prioritization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     storyFindMany.mockResolvedValue([]);
+    mediaAssetFindMany.mockResolvedValue([]);
   });
 
   it("selects personalized image over shared image for the session student", async () => {
@@ -365,7 +368,19 @@ describe("getSessionForReader personalized image prioritization", () => {
 
     const session = await getSessionForReader(sessionId);
     expect(session.story.categoryName).toBe("Bergiliran");
-    expect(session.availableStories).toBeDefined();
+    expect(session.availableStories).toEqual([]);
+
+    expect(pageFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          media: expect.objectContaining({
+            where: {
+              OR: [{ studentId: null }, { studentId: studentIdA }],
+            },
+          }),
+        }),
+      }),
+    );
 
     expect(session.pages).toHaveLength(1);
     expect(session.pages[0]?.portraitImage?.id).toBe(personalizedImgId);
@@ -411,6 +426,7 @@ describe("getSessionForReader personalized image prioritization", () => {
       },
     });
 
+    // DB filter: shared saja di page.media; portrait murid lain lewat lean query.
     pageFindMany.mockResolvedValue([
       {
         id: pageId,
@@ -426,16 +442,16 @@ describe("getSessionForReader personalized image prioritization", () => {
             storageKey: "shared-key",
             storageBucket: "cermin-media",
           },
-          {
-            id: "other-student-photo",
-            kind: MediaKind.IMAGE,
-            altText: "Foto Budi",
-            sortOrder: 2,
-            studentId: otherStudentId,
-            storageKey: "budi-key",
-            storageBucket: "cermin-media",
-          },
         ],
+      },
+    ]);
+    mediaAssetFindMany.mockResolvedValue([
+      {
+        id: "other-student-photo",
+        altText: "Foto Budi",
+        sortOrder: 2,
+        studentId: otherStudentId,
+        pageId,
       },
     ]);
 
@@ -456,6 +472,10 @@ describe("getSessionForReader personalized image prioritization", () => {
 
     expect(session.pages).toHaveLength(1);
     expect(session.pages[0]?.portraitImage).toBeNull();
+    expect(session.pages[0]?.portraitsByStudentId[otherStudentId]?.id).toBe(
+      "other-student-photo",
+    );
+    expect(session.pages[0]?.portraitsByStudentId[otherStudentId]?.url).toBeNull();
     expect(session.pages[0]?.storyImages.map((m) => m.id)).toEqual([
       sharedImgId,
     ]);

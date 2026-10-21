@@ -48,9 +48,9 @@ CERMIN mendukung pembelajaran social story: kelola murid, user, kategori/cerita/
 | FR-C2 | Banyak cerita per kategori: judul, deskripsi, tujuan belajar, status `draft` \| `review` \| `approved` \| `published` \| `archived`. |
 | FR-C3 | Banyak halaman berurutan per cerita; teks per halaman.                                                                               |
 | FR-C4 | Banyak media (image/audio) terkait halaman/cerita; metadata + `alt_text` untuk gambar.                                               |
-| FR-C5 | Schema mendukung banyak evaluasi per cerita dan banyak item per evaluasi (UI penuh boleh fase 2).                                    |
+| FR-C5 | Maks satu soal MCQ A–D per halaman (opsional): teks + gambar soal/opsi + kunci benar; diedit di tab Halaman (bukan tab Evaluasi terpisah). |
 | FR-C6 | Banyak `LearningSession` per pasangan murid+cerita.                                                                                  |
-| FR-C7 | Observasi dan respons evaluasi terpisah per sesi.                                                                                    |
+| FR-C7 | Observasi dan respons soal MCQ terpisah per sesi; anak/adult pilih A–D di halaman tanpa skor/confetti.                              |
 | FR-C8 | Schema `StoryVersion` untuk history konten published (UI boleh fase 2).                                                              |
 | FR-C9 | Child mode: adult memilih murid+cerita published → navigasi halaman → audio manual → observasi.                                      |
 

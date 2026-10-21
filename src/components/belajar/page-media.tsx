@@ -96,6 +96,25 @@ export function PageImage({
   );
 }
 
+const SOUND_BAR_COUNT = 7;
+
+function SoundWaveGraphic({ playing }: { playing: boolean }) {
+  return (
+    <div
+      className={
+        playing
+          ? "belajar-sound-viz belajar-sound-viz--playing"
+          : "belajar-sound-viz belajar-sound-viz--idle"
+      }
+      aria-hidden
+    >
+      {Array.from({ length: SOUND_BAR_COUNT }, (_, i) => (
+        <span key={i} className="belajar-sound-viz__bar" />
+      ))}
+    </div>
+  );
+}
+
 export function PageAudioButton({ audio }: { audio: MediaRef }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [url, setUrl] = useState<string | null>(audio.url ?? null);
@@ -165,12 +184,33 @@ export function PageAudioButton({ audio }: { audio: MediaRef }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex w-full max-w-sm flex-col items-center gap-3">
+      <div
+        className={
+          playing
+            ? "flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent-soft,#e6f2ee)] px-4 py-3"
+            : "flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-[var(--belajar-line,#c5d4cc)] bg-white px-4 py-3"
+        }
+      >
+        <SoundWaveGraphic playing={playing} />
+        <p
+          className="text-center text-base font-medium text-[var(--belajar-quiet,#5c6b73)]"
+          role="status"
+          aria-live="polite"
+        >
+          {playing
+            ? "Sedang diputar"
+            : loading
+              ? "Memuat suara…"
+              : "Suara cerita"}
+        </p>
+      </div>
+
       {playing ? (
         <button
           type="button"
           onClick={onPauseClick}
-          className="min-h-14 min-w-[12rem] rounded-2xl border-2 border-[#3d7c6b] bg-white px-6 py-3 text-xl font-semibold text-[#1f2933] shadow-sm hover:bg-[#eef6f2] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b]"
+          className="inline-flex min-h-14 w-full min-w-[12rem] items-center justify-center rounded-2xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-white px-6 py-3 text-xl font-semibold text-[var(--belajar-ink,#1f2933)] shadow-sm hover:bg-[var(--belajar-accent-soft,#e6f2ee)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)]"
         >
           Jeda suara
         </button>
@@ -179,7 +219,7 @@ export function PageAudioButton({ audio }: { audio: MediaRef }) {
           type="button"
           onClick={() => void onPlayClick()}
           disabled={loading}
-          className="min-h-14 min-w-[12rem] rounded-2xl border-2 border-[#3d7c6b] bg-[#3d7c6b] px-6 py-3 text-xl font-semibold text-white shadow-sm hover:bg-[#34695b] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b] disabled:opacity-60"
+          className="inline-flex min-h-14 w-full min-w-[12rem] items-center justify-center rounded-2xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent,#3d7c6b)] px-6 py-3 text-xl font-semibold text-white shadow-sm hover:bg-[#34695b] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
         >
           {loading ? "Memuat…" : "Putar suara"}
         </button>

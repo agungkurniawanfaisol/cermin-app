@@ -2,29 +2,33 @@
  * @vitest-environment jsdom
  */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionStartEntry } from "@/app/dashboard/sesi/session-start-entry";
 import { SessionStartFlow } from "@/app/dashboard/sesi/session-start-flow";
 import * as sessionsModule from "@/server/actions/sessions";
 
 const pushMock = vi.fn();
-const replaceMock = vi.fn();
-let search = "";
+const historyPushState = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: pushMock,
-    replace: replaceMock,
+    replace: vi.fn(),
   }),
   usePathname: () => "/sesi/mulai",
-  useSearchParams: () => new URLSearchParams(search),
 }));
 
 describe("Session start — entry + fullscreen wizard", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
-    search = "";
+  });
+
+  beforeEach(() => {
+    vi.stubGlobal("history", {
+      ...window.history,
+      pushState: historyPushState,
+    });
   });
 
   const students = [
@@ -78,11 +82,11 @@ describe("Session start — entry + fullscreen wizard", () => {
   });
 
   it("fullscreen wizard filters stories by category tanpa pilih murid dulu", () => {
-    search = "step=category";
-    const { rerender } = render(
+    render(
       <SessionStartFlow
         students={students}
         stories={stories}
+        initialStep="category"
         fullscreen
       />,
     );
@@ -91,19 +95,10 @@ describe("Session start — entry + fullscreen wizard", () => {
     expect(screen.queryByLabelText("Murid")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Bergiliran/i }));
-    const storyNav = String(replaceMock.mock.calls.at(-1)?.[0] ?? "");
+    const storyNav = String(historyPushState.mock.calls.at(-1)?.[2] ?? "");
     expect(storyNav).toContain("step=story");
     expect(storyNav).toContain("categoryId=cat-1");
     expect(storyNav).not.toContain("studentId=");
-
-    search = "step=story&categoryId=cat-1";
-    rerender(
-      <SessionStartFlow
-        students={students}
-        stories={stories}
-        fullscreen
-      />,
-    );
 
     expect(
       screen.getByRole("region", { name: /Pilih cerita: Bergiliran/i }),
@@ -124,11 +119,13 @@ describe("Session start — entry + fullscreen wizard", () => {
         data: { id: "session-123" },
       });
 
-    search = "step=preview&categoryId=cat-2&storyId=story-3";
     render(
       <SessionStartFlow
         students={students}
         stories={stories}
+        initialStep="preview"
+        initialCategoryId="cat-2"
+        initialStoryId="story-3"
         fullscreen
       />,
     );

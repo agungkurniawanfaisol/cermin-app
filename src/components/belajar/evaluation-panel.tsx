@@ -1,46 +1,33 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
-  listSessionEvaluationItems,
-  upsertSessionEvaluationResponse,
-  type SessionEvalItemView,
+  listSessionMcqSummary,
+  type SessionMcqSummaryRow,
 } from "@/server/actions/evaluations";
 
 export function EvaluationPanel({
   sessionId,
-  disabled,
+  studentName,
 }: {
   sessionId: string;
+  studentId: string;
+  studentName?: string;
   disabled?: boolean;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<SessionEvalItemView[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [rows, setRows] = useState<SessionMcqSummaryRow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     void (async () => {
       try {
-        const rows = await listSessionEvaluationItems(sessionId);
-        if (cancelled) return;
-        setItems(rows);
-        const next: Record<string, string> = {};
-        for (const row of rows) {
-          if (row.response?.value != null) {
-            next[row.id] = String(row.response.value);
-          } else {
-            next[row.id] = "";
-          }
-        }
-        setDrafts(next);
+        const data = await listSessionMcqSummary(sessionId);
+        if (!cancelled) setRows(data);
       } catch {
-        if (!cancelled) setError("Gagal memuat evaluasi");
+        if (!cancelled) setError("Gagal memuat ringkasan soal");
       }
     })();
     return () => {
@@ -48,133 +35,65 @@ export function EvaluationPanel({
     };
   }, [open, sessionId]);
 
-  function onSave(itemId: string, itemType: string) {
-    setError(null);
-    const raw = (drafts[itemId] ?? "").trim();
-    if (!raw) {
-      setError("Isi jawaban terlebih dahulu");
-      return;
-    }
-    let value: string | number = raw;
-    if (itemType === "SCALE") {
-      const n = Number.parseInt(raw, 10);
-      if (Number.isNaN(n) || n < 1 || n > 5) {
-        setError("Skala harus 1–5");
-        return;
-      }
-      value = n;
-    }
-
-    startTransition(async () => {
-      const result = await upsertSessionEvaluationResponse({
-        sessionId,
-        evaluationItemId: itemId,
-        value,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      router.refresh();
-    });
-  }
-
   return (
-    <aside className="mt-4 border-t border-[#d9e2ec] pt-4">
+    <section className="rounded-2xl border border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] p-4 sm:p-5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-11 items-center text-base font-semibold text-[#5c6b73] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d7c6b]"
+        className="flex min-h-11 w-full items-center justify-between gap-2 text-left text-base font-semibold text-[var(--belajar-ink,#1f2933)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)]"
         aria-expanded={open}
       >
-        {open ? "Sembunyikan evaluasi" : "Evaluasi sesi"}
+        <span>Ringkasan soal{studentName ? ` · ${studentName}` : ""}</span>
+        <span className="text-sm font-normal text-[var(--belajar-quiet,#5c6b73)]">
+          {open ? "Tutup" : "Buka"}
+        </span>
       </button>
 
       {open ? (
-        <div className="mt-4 space-y-4 rounded-xl border border-[#d9e2ec] bg-white/80 p-4 text-base">
-          {items.length === 0 ? (
-            <p className="text-[#5c6b73]">
-              Cerita ini belum punya template evaluasi.
-            </p>
-          ) : (
-            <ul className="space-y-4">
-              {items.map((item) => (
-                <li key={item.id} className="space-y-2">
-                  <p className="text-sm font-medium text-[#5c6b73]">
-                    {item.evaluationTitle}
-                  </p>
-                  <label
-                    htmlFor={`eval-${item.id}`}
-                    className="block font-medium text-[#1f2933]"
-                  >
-                    {item.prompt}
-                  </label>
-                  {item.itemType === "SCALE" ? (
-                    <select
-                      id={`eval-${item.id}`}
-                      value={drafts[item.id] ?? ""}
-                      onChange={(e) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [item.id]: e.target.value,
-                        }))
-                      }
-                      disabled={pending || disabled}
-                      className="min-h-11 w-full rounded-lg border border-[#d9e2ec] bg-white px-3 text-base"
-                    >
-                      <option value="">Pilih 1–5</option>
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <option key={n} value={String(n)}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <textarea
-                      id={`eval-${item.id}`}
-                      value={drafts[item.id] ?? ""}
-                      onChange={(e) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [item.id]: e.target.value,
-                        }))
-                      }
-                      rows={2}
-                      disabled={pending || disabled}
-                      className="w-full rounded-lg border border-[#d9e2ec] bg-white px-3 py-2 text-base"
-                      placeholder="Jawaban singkat…"
-                    />
-                  )}
-                  {!disabled ? (
-                    <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => onSave(item.id, item.itemType)}
-                        className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#3d7c6b] px-4 font-semibold text-white disabled:opacity-50 sm:w-auto"
-                      >
-                        {pending ? "Menyimpan…" : "Simpan"}
-                      </button>
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {disabled ? (
-            <p className="text-[#5c6b73]">
-              Sesi sudah berakhir. Evaluasi tidak dapat diubah.
-            </p>
-          ) : null}
-
+        <div className="mt-4 space-y-3">
           {error ? (
-            <p className="text-[#9b1c1c]" role="alert">
+            <p className="text-sm text-[var(--danger,#9b2c2c)]" role="alert">
               {error}
             </p>
           ) : null}
+          {rows.length === 0 && !error ? (
+            <p className="text-sm text-[var(--belajar-quiet,#5c6b73)]">
+              Cerita ini belum punya soal di halaman, atau belum ada jawaban.
+            </p>
+          ) : null}
+          <ul className="space-y-3">
+            {rows.map((row) => {
+              const choiceLabel = (key: string) =>
+                row.choices.find((c) => c.key === key)?.labelText.trim() || key;
+              return (
+                <li
+                  key={row.pageMcqId}
+                  className="rounded-xl border border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-accent-soft,#e6f2ee)]/40 px-3 py-3"
+                >
+                  <p className="text-xs font-medium text-[var(--belajar-quiet,#5c6b73)]">
+                    Halaman {row.pageSortOrder}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-[var(--belajar-ink,#1f2933)]">
+                    {row.prompt}
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--belajar-ink,#1f2933)]">
+                    Jawaban:{" "}
+                    <span className="font-semibold">
+                      {row.selectedKey
+                        ? `${row.selectedKey} — ${choiceLabel(row.selectedKey)}`
+                        : "Belum dijawab"}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--belajar-quiet,#5c6b73)]">
+                    Kunci (dewasa): {row.correctKey} —{" "}
+                    {choiceLabel(row.correctKey)}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
-    </aside>
+    </section>
   );
 }

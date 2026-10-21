@@ -31,7 +31,7 @@ async function BuatCeritaContent() {
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--cermin-muted,#5c6b73)]">
             Mulai dari identitas draf. Langkah berikutnya — halaman, media,
-            evaluasi, dan penerbitan — dibuka di editor bertahap.
+            soal per halaman, dan penerbitan — dibuka di editor bertahap.
           </p>
         </div>
         <Link

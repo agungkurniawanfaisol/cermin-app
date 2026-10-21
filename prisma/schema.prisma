@@ -197,6 +197,8 @@ model TherapistAssignment {
 
   @@index([therapistId])
   @@index([studentId])
+  // listActiveStudents / authz: therapistId + endedAt IS NULL
+  @@index([therapistId, endedAt])
   // Partial unique: at most one active assignment per (therapistId, studentId).
   // Prisma cannot express WHERE "endedAt" IS NULL; enforced in migration:
   // CREATE UNIQUE INDEX therapist_assignments_active_unique
@@ -215,6 +217,8 @@ model ParentLink {
 
   @@unique([parentId, studentId])
   @@index([studentId])
+  // userHasAnyStudentAccess / list ortu: parentId + isActive
+  @@index([parentId, isActive])
   @@map("parent_links")
 }
 
@@ -244,6 +248,8 @@ model StoryCategory {
   imageKey    String?
   stories     Story[]
 
+  // listActiveCategories: isActive + sortOrder
+  @@index([isActive, sortOrder])
   @@map("story_categories")
 }
 
@@ -262,7 +268,6 @@ model Story {
   createdBy          User          @relation("StoryCreator", fields: [createdById], references: [id])
   pages              StoryPage[]
   versions           StoryVersion[]
-  evaluations        StoryEvaluation[]
   media              MediaAsset[]
   learningSessions   LearningSession[]
 
@@ -296,6 +301,8 @@ model StoryPage {
   bodyText  String   @default("")
   story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
   media     MediaAsset[]
+  /// Maks 1 soal MCQ per halaman (opsional).
+  mcq       PageMcq?
 
   @@unique([storyId, sortOrder])
   @@map("story_pages")
@@ -325,6 +332,8 @@ model MediaAsset {
   @@index([storyId])
   @@index([studentId])
   @@index([pageId, studentId])
+  // Cover story-level + filter kind: storyId + kind + pageId (null = cover)
+  @@index([storyId, kind, pageId])
   // Partial unique: one personalized IMAGE per (page, student).
   // Prisma cannot express WHERE; enforced in migration:
   // CREATE UNIQUE INDEX media_assets_page_student_image_unique
@@ -367,28 +376,34 @@ model GuideDocument {
   @@map("guide_documents")
 }
 
-model StoryEvaluation {
-  id          String   @id @default(uuid()) @db.Uuid
-  storyId     String   @db.Uuid
-  title       String
-  description String   @default("")
-  sortOrder   Int      @default(0)
-  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  items       EvaluationItem[]
+/// Soal MCQ A–D menempel di satu halaman cerita (opsional, maks 1).
+model PageMcq {
+  id             String   @id @default(uuid()) @db.Uuid
+  pageId         String   @unique @db.Uuid
+  prompt         String   @default("")
+  /// Private Storage key (cermin-media), gambar soal opsional.
+  promptImageKey String?
+  /// Jawaban benar: A | B | C | D
+  correctKey     String
+  page           StoryPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  choices        PageMcqChoice[]
+  responses      SessionMcqResponse[]
 
-  @@map("story_evaluations")
+  @@map("page_mcqs")
 }
 
-model EvaluationItem {
-  id           String          @id @default(uuid()) @db.Uuid
-  evaluationId String          @db.Uuid
-  prompt       String
-  itemType     String          @default("TEXT")
-  sortOrder    Int             @default(0)
-  evaluation   StoryEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
-  responses    SessionEvaluationResponse[]
+model PageMcqChoice {
+  id        String  @id @default(uuid()) @db.Uuid
+  mcqId     String  @db.Uuid
+  /// A | B | C | D
+  key       String
+  labelText String  @default("")
+  imageKey  String?
+  mcq       PageMcq @relation(fields: [mcqId], references: [id], onDelete: Cascade)
 
-  @@map("evaluation_items")
+  @@unique([mcqId, key])
+  @@index([mcqId])
+  @@map("page_mcq_choices")
 }
 
 model LearningSession {
@@ -402,7 +417,7 @@ model LearningSession {
   story        Story     @relation(fields: [storyId], references: [id])
   ledBy        User      @relation(fields: [ledByUserId], references: [id])
   observations SessionObservation[]
-  responses    SessionEvaluationResponse[]
+  mcqResponses SessionMcqResponse[]
 
   // Riwayat sesi: per murid / pemandu + urutan waktu
   @@index([studentId, startedAt(sort: Desc)])
@@ -421,20 +436,23 @@ model SessionObservation {
   session      LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   recordedBy   User            @relation(fields: [recordedById], references: [id])
 
+  // getSessionForReader: where sessionId order recordedAt desc
+  @@index([sessionId, recordedAt(sort: Desc)])
   @@map("session_observations")
 }
 
-model SessionEvaluationResponse {
-  id               String          @id @default(uuid()) @db.Uuid
-  sessionId        String          @db.Uuid
-  evaluationItemId String          @db.Uuid
-  value            Json
-  note             String?
-  session          LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  evaluationItem   EvaluationItem  @relation(fields: [evaluationItemId], references: [id])
+model SessionMcqResponse {
+  id          String          @id @default(uuid()) @db.Uuid
+  sessionId   String          @db.Uuid
+  pageMcqId   String          @db.Uuid
+  selectedKey String
+  session     LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  mcq         PageMcq         @relation(fields: [pageMcqId], references: [id], onDelete: Cascade)
 
-  @@unique([sessionId, evaluationItemId])
-  @@map("session_evaluation_responses")
+  @@unique([sessionId, pageMcqId])
+  @@index([sessionId])
+  @@index([pageMcqId])
+  @@map("session_mcq_responses")
 }
 
 model AuditLog {

@@ -42,9 +42,15 @@ export type PageMediaUploaderHandle = {
   /**
    * Unggah semua file pending (foto per murid + ilustrasi/audio umum).
    * No-op jika kosong. Replace personalisasi = hapus lama lalu unggah baru.
+   * Mengembalikan daftar media halaman terbaru agar parent bisa sync state.
    */
   uploadPending: () => Promise<
-    { error: string } | { error: null; uploaded: UploadedMediaPayload[] }
+    | { error: string; media?: undefined }
+    | {
+        error: null;
+        uploaded: UploadedMediaPayload[];
+        media: PageMediaItem[];
+      }
   >;
 };
 
@@ -53,44 +59,77 @@ export type MediaFocusSection = "portrait" | "illustration" | "extra";
 type PortraitPending = {
   altText: string;
   fileName: string;
+  /** File di state — jangan andalkan input DOM (bisa hilang saat remount). */
+  file: File | null;
+  previewUrl: string | null;
 };
+
+async function fetchSignedMediaUrl(mediaId: string): Promise<string> {
+  const res = await fetch(`/api/media/${mediaId}`, {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const body = (await res.json()) as { url?: string; error?: string };
+  if (!res.ok || !body.url) {
+    throw new Error(body.error ?? "Gagal memuat pratinjau");
+  }
+  return body.url;
+}
 
 function MediaPreview({
   item,
   compact,
+  localSrc,
 }: {
-  item: PageMediaItem;
+  item?: PageMediaItem | null;
   compact?: boolean;
+  /** Pratinjau lokal (object URL) sebelum / sesaat setelah unggah. */
+  localSrc?: string | null;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(localSrc ?? null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (localSrc) {
+      setUrl(localSrc);
+      setError(null);
+      return;
+    }
+
+    if (!item?.id) {
+      setUrl(null);
+      return;
+    }
+
     let cancelled = false;
+    setUrl(null);
+    setError(null);
 
     void (async () => {
       try {
-        const res = await fetch(`/api/media/${item.id}`);
-        const body = (await res.json()) as { url?: string; error?: string };
-        if (cancelled) return;
-        if (!res.ok || !body.url) {
-          setError(body.error ?? "Gagal memuat pratinjau");
-          return;
+        const signed = await fetchSignedMediaUrl(item.id);
+        if (!cancelled) setUrl(signed);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Gagal memuat pratinjau",
+          );
         }
-        setUrl(body.url);
-      } catch {
-        if (!cancelled) setError("Gagal memuat pratinjau");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [item.id]);
+  }, [item?.id, localSrc]);
 
-  if (error) {
+  const imgClass = compact
+    ? "h-full w-full object-cover"
+    : "max-h-40 w-full rounded-lg border border-[var(--border,#d9e2ec)] object-contain";
+
+  if (error && !url) {
     return (
-      <p className="text-xs text-[var(--cermin-muted,#5c6b73)]" role="status">
+      <p className="px-1 text-center text-xs text-[var(--cermin-muted,#5c6b73)]" role="status">
         {error}
       </p>
     );
@@ -98,26 +137,34 @@ function MediaPreview({
 
   if (!url) {
     return (
-      <p className="text-xs text-[var(--cermin-muted,#5c6b73)]" role="status">
+      <p className="px-1 text-center text-xs text-[var(--cermin-muted,#5c6b73)]" role="status">
         Memuat media…
       </p>
     );
   }
 
-  if (item.kind === "AUDIO") {
+  if (item?.kind === "AUDIO") {
     return <audio controls src={url} className="w-full" preload="none" />;
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- signed URL from private bucket
+    // eslint-disable-next-line @next/next/no-img-element -- signed URL / blob lokal
     <img
       src={url}
-      alt={item.altText ?? "Media cerita"}
-      className={
-        compact
-          ? "max-h-24 w-full rounded-md border border-[var(--border,#d9e2ec)] object-contain sm:max-h-28"
-          : "max-h-40 rounded-lg border border-[var(--border,#d9e2ec)] object-contain"
-      }
+      alt={item?.altText ?? "Media cerita"}
+      className={imgClass}
+      onError={() => {
+        if (localSrc || !item?.id) {
+          setError("Gagal memuat pratinjau");
+          return;
+        }
+        void fetchSignedMediaUrl(item.id)
+          .then((fresh) => {
+            setUrl(fresh);
+            setError(null);
+          })
+          .catch(() => setError("Gagal memuat pratinjau"));
+      }}
     />
   );
 }
@@ -210,9 +257,14 @@ export const PageMediaUploader = forwardRef<
     Record<string, PortraitPending>
   >({});
   const [imageAlt, setImageAlt] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageFileName, setImageFileName] = useState("");
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioFileName, setAudioFileName] = useState("");
   const [extraAlt, setExtraAlt] = useState("");
+  const [extraFile, setExtraFile] = useState<File | null>(null);
+  const [extraPreviewUrl, setExtraPreviewUrl] = useState<string | null>(null);
   const [extraFileName, setExtraFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -223,11 +275,29 @@ export const PageMediaUploader = forwardRef<
   const portraitPendingRef = useRef(portraitPending);
   const imageAltRef = useRef(imageAlt);
   const extraAltRef = useRef(extraAlt);
+  const imageFileRef = useRef(imageFile);
+  const audioFileRef = useRef(audioFile);
+  const extraFileRef = useRef(extraFile);
   mediaRef.current = media;
   studentsRef.current = students;
   portraitPendingRef.current = portraitPending;
   imageAltRef.current = imageAlt;
   extraAltRef.current = extraAlt;
+  imageFileRef.current = imageFile;
+  audioFileRef.current = audioFile;
+  extraFileRef.current = extraFile;
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      if (extraPreviewUrl) URL.revokeObjectURL(extraPreviewUrl);
+      for (const p of Object.values(portraitPendingRef.current)) {
+        if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+      }
+    };
+    // Hanya unmount — revoke URL di handler saat diganti
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const portraitByStudent = useMemo(() => {
     const map = new Map<string, PageMediaItem>();
@@ -260,29 +330,20 @@ export const PageMediaUploader = forwardRef<
       const studentList = studentsRef.current;
       const pendingMap = portraitPendingRef.current;
 
-      const portraitJobs = studentList.filter((s) => {
-        const input = document.getElementById(
-          portraitInputId(pageId, s.id),
-        );
-        return (
-          input instanceof HTMLInputElement && (input.files?.[0] ?? null) != null
-        );
-      });
+      const portraitJobs = studentList.filter(
+        (s) => pendingMap[s.id]?.file != null,
+      );
 
       for (const student of portraitJobs) {
-        const input = document.getElementById(
-          portraitInputId(pageId, student.id),
-        );
-        if (!(input instanceof HTMLInputElement)) continue;
-        const rawFile = input.files?.[0] ?? null;
+        const pendingMeta = pendingMap[student.id];
+        const rawFile = pendingMeta?.file ?? null;
         if (!rawFile) continue;
 
         const existing = workingMedia.find(
           (m) => m.kind === "IMAGE" && m.studentId === student.id,
         );
         const alt =
-          pendingMap[student.id]?.altText?.trim() ||
-          (existing?.altText ?? "").trim();
+          pendingMeta?.altText?.trim() || (existing?.altText ?? "").trim();
 
         if (!alt) {
           const msg = `Teks alternatif wajib untuk foto ${student.displayName}`;
@@ -323,52 +384,70 @@ export const PageMediaUploader = forwardRef<
             displayName: student.displayName,
           }),
         ];
-        input.value = "";
+
+        const input = document.getElementById(
+          portraitInputId(pageId, student.id),
+        );
+        if (input instanceof HTMLInputElement) input.value = "";
       }
 
       const sharedJobs: Array<{
-        inputId: string;
+        file: File | null;
         kind: "IMAGE" | "AUDIO";
         alt: string;
+        inputId: string;
         clear: () => void;
       }> = [
         {
-          inputId: storyImageInputId(pageId),
+          file: imageFileRef.current,
           kind: "IMAGE",
           alt: imageAltRef.current,
+          inputId: storyImageInputId(pageId),
           clear: () => {
             setImageAlt("");
             setImageFileName("");
+            setImageFile(null);
+            setImagePreviewUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return null;
+            });
           },
         },
         {
-          inputId: storyExtraImageInputId(pageId),
+          file: extraFileRef.current,
           kind: "IMAGE",
           alt: extraAltRef.current,
+          inputId: storyExtraImageInputId(pageId),
           clear: () => {
             setExtraAlt("");
             setExtraFileName("");
+            setExtraFile(null);
+            setExtraPreviewUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return null;
+            });
           },
         },
         {
-          inputId: storyAudioInputId(pageId),
+          file: audioFileRef.current,
           kind: "AUDIO",
           alt: "",
+          inputId: storyAudioInputId(pageId),
           clear: () => {
             setAudioFileName("");
+            setAudioFile(null);
           },
         },
       ];
 
       for (const job of sharedJobs) {
-        const input = document.getElementById(job.inputId);
-        if (!(input instanceof HTMLInputElement) || !input.files?.[0]) continue;
+        if (!job.file) continue;
 
         const result = await uploadSharedFile({
           storyId,
           pageId,
           kind: job.kind,
-          rawFile: input.files[0],
+          rawFile: job.file,
           altText: job.alt,
         });
         if (!result.ok) {
@@ -379,16 +458,22 @@ export const PageMediaUploader = forwardRef<
 
         uploaded.push(result.data);
         workingMedia = [...workingMedia, toMediaItem(result.data, null)];
-        input.value = "";
+        const input = document.getElementById(job.inputId);
+        if (input instanceof HTMLInputElement) input.value = "";
         job.clear();
       }
 
       if (uploaded.length > 0) {
         onMediaChange?.(workingMedia);
-        setPortraitPending({});
+        setPortraitPending((prev) => {
+          for (const p of Object.values(prev)) {
+            if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+          }
+          return {};
+        });
       }
 
-      return { error: null, uploaded };
+      return { error: null, uploaded, media: workingMedia };
     },
   }));
 
@@ -418,28 +503,64 @@ export const PageMediaUploader = forwardRef<
       [studentId]: {
         altText,
         fileName: prev[studentId]?.fileName ?? "",
+        file: prev[studentId]?.file ?? null,
+        previewUrl: prev[studentId]?.previewUrl ?? null,
       },
     }));
   }
 
   function onPortraitFileChange(studentId: string, file: File | null) {
     setPortraitPending((prev) => {
+      const previous = prev[studentId];
+      if (previous?.previewUrl) URL.revokeObjectURL(previous.previewUrl);
+
       if (!file) {
-        const next = { ...prev };
-        if (next[studentId]) {
-          next[studentId] = { ...next[studentId]!, fileName: "" };
-        }
-        return next;
+        if (!previous) return prev;
+        return {
+          ...prev,
+          [studentId]: {
+            ...previous,
+            fileName: "",
+            file: null,
+            previewUrl: null,
+          },
+        };
       }
+
       const existing = portraitByStudent.get(studentId);
       return {
         ...prev,
         [studentId]: {
           fileName: file.name,
-          altText: prev[studentId]?.altText || existing?.altText || "",
+          altText: previous?.altText || existing?.altText || "",
+          file,
+          previewUrl: URL.createObjectURL(file),
         },
       };
     });
+  }
+
+  function onStoryImageFileChange(file: File | null) {
+    setImagePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+    setImageFile(file);
+    setImageFileName(file?.name ?? "");
+  }
+
+  function onExtraImageFileChange(file: File | null) {
+    setExtraPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+    setExtraFile(file);
+    setExtraFileName(file?.name ?? "");
+  }
+
+  function onAudioFileChange(file: File | null) {
+    setAudioFile(file);
+    setAudioFileName(file?.name ?? "");
   }
 
   return (
@@ -518,7 +639,12 @@ export const PageMediaUploader = forwardRef<
 
                       <div className="grid gap-3 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:items-start">
                         <div className="flex aspect-square w-full max-w-[7.5rem] items-center justify-center overflow-hidden rounded-lg border border-[var(--border,#d9e2ec)] bg-white">
-                          {existing ? (
+                          {pendingMeta?.previewUrl ? (
+                            <MediaPreview
+                              localSrc={pendingMeta.previewUrl}
+                              compact
+                            />
+                          ) : existing ? (
                             <MediaPreview item={existing} compact />
                           ) : (
                             <span className="px-2 text-center text-xs text-[var(--cermin-muted,#5c6b73)]">
@@ -714,12 +840,17 @@ export const PageMediaUploader = forwardRef<
                 disabled={pending}
                 accept="image/jpeg,image/png,image/webp"
                 onChange={(e) =>
-                  setImageFileName(e.target.files?.[0]?.name ?? "")
+                  onStoryImageFileChange(e.target.files?.[0] ?? null)
                 }
               />
               <p className="text-xs text-[var(--cermin-muted,#5c6b73)]">
                 JPEG/PNG/WebP — dikompres otomatis, maks. 5 MB
               </p>
+              {imagePreviewUrl ? (
+                <div className="overflow-hidden rounded-lg border border-[var(--border,#d9e2ec)] bg-white p-2">
+                  <MediaPreview localSrc={imagePreviewUrl} />
+                </div>
+              ) : null}
               {imageFileName ? (
                 <p className="text-xs text-[var(--cermin-accent,#3d7c6b)]">
                   Siap diunggah: {imageFileName}
@@ -811,7 +942,7 @@ export const PageMediaUploader = forwardRef<
                   disabled={pending}
                   accept="audio/mpeg,audio/wav,audio/ogg"
                   onChange={(e) =>
-                    setAudioFileName(e.target.files?.[0]?.name ?? "")
+                    onAudioFileChange(e.target.files?.[0] ?? null)
                   }
                 />
                 <p className="text-xs text-[var(--cermin-muted,#5c6b73)]">
@@ -846,9 +977,14 @@ export const PageMediaUploader = forwardRef<
                   disabled={pending}
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(e) =>
-                    setExtraFileName(e.target.files?.[0]?.name ?? "")
+                    onExtraImageFileChange(e.target.files?.[0] ?? null)
                   }
                 />
+                {extraPreviewUrl ? (
+                  <div className="overflow-hidden rounded-lg border border-[var(--border,#d9e2ec)] bg-white p-2">
+                    <MediaPreview localSrc={extraPreviewUrl} />
+                  </div>
+                ) : null}
                 {extraFileName ? (
                   <p className="text-xs text-[var(--cermin-accent,#3d7c6b)]">
                     Siap diunggah: {extraFileName}

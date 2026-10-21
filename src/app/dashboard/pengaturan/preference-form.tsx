@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, useTransition } from "react";
-import { Volume2, VolumeX, Type } from "lucide-react";
+import { Volume2, VolumeX, Type, Accessibility } from "lucide-react";
 import { updateMyPreference } from "@/server/actions/preferences";
 import { TEXT_SIZE_LABELS } from "@/server/validations/preference";
 import { Button } from "@/components/ui/button";
@@ -230,6 +230,37 @@ export function PreferenceForm({
             />
           </span>
         </button>
+      </section>
+
+      <section
+        className="rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] p-4 sm:p-6"
+        aria-labelledby="motion-pref-heading"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft,#e6f2ee)] text-[var(--cermin-accent,#3d7c6b)]"
+            aria-hidden
+          >
+            <Accessibility className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2
+              id="motion-pref-heading"
+              className="text-lg font-semibold text-[var(--text,#1f2933)]"
+            >
+              Gerakan dan ketenangan
+            </h2>
+            <p className="mt-1 text-sm text-[var(--cermin-muted,#5c6b73)]">
+              CERMIN memakai latar terang, aksen tenang, tanpa confetti atau
+              flash. Jika perangkat Anda mengaktifkan{" "}
+              <span className="font-medium text-[var(--text,#1f2933)]">
+                kurangi gerakan
+              </span>{" "}
+              (preferensi aksesibilitas sistem), animasi di mode belajar dan
+              dasbor dikurangi otomatis — tidak perlu diatur di sini.
+            </p>
+          </div>
+        </div>
       </section>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

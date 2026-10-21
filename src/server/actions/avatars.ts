@@ -12,6 +12,7 @@ import {
   type StudentPhotoSlot,
 } from "@/lib/avatar-storage";
 import { prisma } from "@/lib/db";
+import { checkRateLimit, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 import {
   assertCanAccessStudent,
   requireSession,
@@ -39,6 +40,15 @@ export async function uploadUserAvatar(
 ): Promise<ActionResult<{ hasImage: true }>> {
   try {
     const user = await requireSession();
+    const avatarLimit = checkRateLimit(
+      `avatar:user:${user.id}`,
+      10,
+      60 * 60 * 1000,
+    );
+    if (!avatarLimit.ok) {
+      return { ok: false, error: RATE_LIMIT_MESSAGE };
+    }
+
     const fileEntry = formData.get("file");
     if (!(fileEntry instanceof File)) {
       return { ok: false, error: "File foto wajib diunggah" };
@@ -84,6 +94,15 @@ export async function uploadStudentAvatar(
 ): Promise<ActionResult<{ hasImage: true; slot: StudentPhotoSlot }>> {
   try {
     const user = await requireSession();
+    const avatarLimit = checkRateLimit(
+      `avatar:student:${user.id}`,
+      20,
+      60 * 60 * 1000,
+    );
+    if (!avatarLimit.ok) {
+      return { ok: false, error: RATE_LIMIT_MESSAGE };
+    }
+
     const studentIdRaw = formData.get("studentId");
     const parsed = studentIdSchema.safeParse({
       studentId: typeof studentIdRaw === "string" ? studentIdRaw : "",

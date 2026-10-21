@@ -11,6 +11,8 @@ export const sessionIdSchema = z.object({
 
 export const addObservationSchema = z.object({
   sessionId: z.string().uuid("ID sesi tidak valid"),
+  /** Murid yang dipilih di UI — disinkronkan ke sesi saat simpan. */
+  studentId: z.string().uuid("ID murid tidak valid"),
   note: z
     .string()
     .trim()

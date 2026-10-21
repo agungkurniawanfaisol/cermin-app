@@ -10,6 +10,14 @@ export const instant = false;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function firstString(
+  raw: string | string[] | undefined,
+): string {
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw)) return raw[0] ?? "";
+  return "";
+}
+
 async function MulaiSesiContent({
   searchParams,
 }: {
@@ -22,13 +30,13 @@ async function MulaiSesiContent({
     throw error;
   }
 
+  // searchParams hanya untuk boot wizard — ganti step di klien pakai history
+  // (bukan router.replace) agar katalog tidak di-RSC-ulang.
   const sp = await searchParams;
-  const rawStudent =
-    typeof sp.studentId === "string"
-      ? sp.studentId
-      : Array.isArray(sp.studentId)
-        ? (sp.studentId[0] ?? "")
-        : "";
+  const rawStep = firstString(sp.step);
+  const rawStudent = firstString(sp.studentId);
+  const rawCategory = firstString(sp.categoryId);
+  const rawStory = firstString(sp.storyId);
 
   const [students, stories] = await Promise.all([
     listActiveStudentsForSession(),
@@ -49,6 +57,13 @@ async function MulaiSesiContent({
       students={students}
       stories={stories}
       initialStudentId={initialStudentId}
+      initialStep={
+        rawStep === "story" || rawStep === "preview" || rawStep === "category"
+          ? rawStep
+          : "category"
+      }
+      initialCategoryId={UUID_RE.test(rawCategory) ? rawCategory : ""}
+      initialStoryId={UUID_RE.test(rawStory) ? rawStory : ""}
       fullscreen
     />
   );

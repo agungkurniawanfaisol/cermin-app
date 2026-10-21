@@ -3,17 +3,17 @@
 import { cache } from "react";
 import {
   MediaKind,
+  Prisma,
   StoryStatus,
   StudentStatus,
   type LearningSession,
-  type Prisma,
   type SessionObservation,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
-import { createCategoryCoverSignedUrl } from "@/lib/category-storage";
+import { createMcqImagesSignedUrlMap } from "@/lib/mcq-storage";
 import {
   resolveStoryCoverMediaId,
   storyCoverMediaWhere,
@@ -34,6 +34,7 @@ import {
   type PolicyUser,
 } from "@/server/policies/access";
 import { listActiveStudentsForSession } from "@/server/actions/students";
+import { ensureSessionStudent } from "@/server/sessions/ensure-session-student";
 import {
   addObservationSchema,
   sessionIdSchema,
@@ -75,14 +76,17 @@ export type PublishedStoryOption = {
   categoryId: string;
   categoryName: string;
   categoryDescription: string | null;
-  /** Signed URL cover kategori (TTL pendek); null jika belum diunggah. */
+  /**
+   * @deprecated Cover kategori di-sign di klien via /api/category/[id]/cover.
+   * Selalu null dari list — jangan block TTFB dengan N signed URL.
+   */
   categoryCoverUrl: string | null;
   pageCount: number;
   /** Cover: prefer IMAGE story-level (pageId null); fallback halaman shared. */
   coverMediaId: string | null;
 };
 
-/** Deduped per RSC request. */
+/** Deduped per RSC request — tanpa nested pages + tanpa signed URL storage. */
 export const listPublishedStoriesForSession = cache(async (): Promise<
   PublishedStoryOption[]
 > => {
@@ -98,7 +102,7 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
       description: true,
       categoryId: true,
       category: {
-        select: { name: true, description: true, imageKey: true },
+        select: { name: true, description: true },
       },
       _count: { select: { pages: true } },
       media: {
@@ -107,33 +111,31 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
         take: 1,
         select: { id: true },
       },
-      pages: {
-        orderBy: { sortOrder: "asc" },
-        select: {
-          media: {
-            where: { kind: "IMAGE", studentId: null },
-            orderBy: { sortOrder: "asc" },
-            take: 1,
-            select: { id: true },
-          },
-        },
-      },
     },
   });
 
-  const coverByCategory = new Map<string, string | null>();
-  await Promise.all(
-    [...new Set(stories.map((s) => s.categoryId))].map(async (categoryId) => {
-      const key = stories.find((s) => s.categoryId === categoryId)?.category
-        .imageKey;
-      if (!key) {
-        coverByCategory.set(categoryId, null);
-        return;
-      }
-      const signed = await createCategoryCoverSignedUrl(key);
-      coverByCategory.set(categoryId, signed.ok ? signed.url : null);
-    }),
-  );
+  const missingCoverStoryIds = stories
+    .filter((s) => !s.media[0]?.id)
+    .map((s) => s.id);
+
+  const fallbackCoverByStory = new Map<string, string>();
+  if (missingCoverStoryIds.length > 0) {
+    // Satu baris first-page shared IMAGE per story (Postgres DISTINCT ON).
+    const rows = await prisma.$queryRaw<
+      Array<{ id: string; story_id: string }>
+    >`
+      SELECT DISTINCT ON (p."storyId") m.id, p."storyId" AS story_id
+      FROM "story_pages" p
+      INNER JOIN "media_assets" m ON m."pageId" = p.id
+      WHERE p."storyId" IN (${Prisma.join(missingCoverStoryIds)})
+        AND m.kind = CAST('IMAGE' AS "MediaKind")
+        AND m."studentId" IS NULL
+      ORDER BY p."storyId", p."sortOrder" ASC, m."sortOrder" ASC
+    `;
+    for (const row of rows) {
+      fallbackCoverByStory.set(row.story_id, row.id);
+    }
+  }
 
   return stories.map((story) => ({
     id: story.id,
@@ -142,13 +144,21 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
     categoryId: story.categoryId,
     categoryName: story.category.name,
     categoryDescription: story.category.description,
-    categoryCoverUrl: coverByCategory.get(story.categoryId) ?? null,
+    categoryCoverUrl: null,
     pageCount: story._count.pages,
     coverMediaId: resolveStoryCoverMediaId({
       storyLevelCoverId: story.media[0]?.id,
-      pages: story.pages,
+      pages: fallbackCoverByStory.has(story.id)
+        ? [{ media: [{ id: fallbackCoverByStory.get(story.id)! }] }]
+        : [],
     }),
   }));
+});
+
+/** Hanya boolean/count — jangan tarik katalog penuh untuk kartu entry dasbor. */
+export const countPublishedStoriesForSession = cache(async (): Promise<number> => {
+  await requireSession();
+  return prisma.story.count({ where: { status: StoryStatus.PUBLISHED } });
 });
 
 export type ListedSession = {
@@ -354,6 +364,9 @@ export async function addObservation(
       throw new AuthzError("Sesi sudah berakhir");
     }
 
+    // Catatan mengikuti nama murid yang dipilih di UI (bukan race state lama).
+    await ensureSessionStudent(user, session, parsed.data.studentId);
+
     const observation = await prisma.sessionObservation.create({
       data: {
         sessionId: parsed.data.sessionId,
@@ -363,6 +376,7 @@ export async function addObservation(
     });
 
     revalidatePath(`/belajar/${parsed.data.sessionId}`);
+    revalidatePath("/dashboard/sesi");
     return { ok: true, data: observation };
   } catch (error) {
     return {
@@ -424,6 +438,19 @@ export type SessionMediaRef = {
   url?: string | null;
 };
 
+/** Child-safe MCQ — tanpa correctKey. */
+export type SessionPageMcq = {
+  id: string;
+  prompt: string;
+  promptImageUrl: string | null;
+  choices: Array<{
+    key: string;
+    labelText: string;
+    imageUrl: string | null;
+  }>;
+  selectedKey: string | null;
+};
+
 export type SessionReaderPage = {
   id: string;
   sortOrder: number;
@@ -439,6 +466,8 @@ export type SessionReaderPage = {
   storyImages: SessionMediaRef[];
   /** Audio narasi umum (studentId null). */
   storyAudios: SessionMediaRef[];
+  /** Soal pilihan opsional (tanpa kunci jawaban). */
+  mcq: SessionPageMcq | null;
 };
 
 export type SessionForReader = {
@@ -507,43 +536,82 @@ export async function getSessionForReader(
     audioEnabled: true,
   };
 
-  // Gelombang 2: Ambil halaman cerita (+ media), observasi sesi, daftar murid aktif, dan daftar cerita terbit secara paralel
-  const [pages, observations, studentOptionsRaw, availableStories] =
+  // Gelombang 2: halaman + observasi + murid + metadata portrait murid lain.
+  // Katalog cerita TIDAK di sini (ChangeStoryDialog on-demand).
+  const studentId = sessionBase.student.id;
+  const [pages, observations, studentOptionsRaw, otherPortraits] =
     await Promise.all([
-    prisma.storyPage.findMany({
-      where: { storyId: sessionBase.storyId },
-      orderBy: { sortOrder: "asc" },
-      select: {
-        id: true,
-        sortOrder: true,
-        bodyText: true,
-        media: {
-          orderBy: { sortOrder: "asc" },
-          select: {
-            id: true,
-            kind: true,
-            altText: true,
-            sortOrder: true,
-            studentId: true,
-            storageKey: true,
-            storageBucket: true,
+      prisma.storyPage.findMany({
+        where: { storyId: sessionBase.storyId },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          sortOrder: true,
+          bodyText: true,
+          media: {
+            // Hanya shared + portrait murid aktif (storageKey untuk batch sign).
+            where: {
+              OR: [{ studentId: null }, { studentId }],
+            },
+            orderBy: { sortOrder: "asc" },
+            select: {
+              id: true,
+              kind: true,
+              altText: true,
+              sortOrder: true,
+              studentId: true,
+              storageKey: true,
+              storageBucket: true,
+            },
+          },
+          mcq: {
+            select: {
+              id: true,
+              prompt: true,
+              promptImageKey: true,
+              choices: {
+                orderBy: { key: "asc" },
+                select: { key: true, labelText: true, imageKey: true },
+              },
+              responses: {
+                where: { sessionId: sessionBase.id },
+                take: 1,
+                select: { selectedKey: true },
+              },
+            },
           },
         },
-      },
-    }),
-    prisma.sessionObservation.findMany({
-      where: { sessionId: sessionBase.id },
-      orderBy: { recordedAt: "desc" },
-      select: {
-        id: true,
-        note: true,
-        recordedAt: true,
-        recordedBy: { select: { id: true, name: true } },
-      },
-    }),
-    listActiveStudentsForSession(),
-      listPublishedStoriesForSession(),
-  ]);
+      }),
+      prisma.sessionObservation.findMany({
+        where: { sessionId: sessionBase.id },
+        orderBy: { recordedAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          note: true,
+          recordedAt: true,
+          recordedBy: { select: { id: true, name: true } },
+        },
+      }),
+      listActiveStudentsForSession(),
+      // Metadata portrait murid lain (tanpa storageKey) — ganti nama lokal.
+      prisma.mediaAsset.findMany({
+        where: {
+          kind: MediaKind.IMAGE,
+          studentId: { not: null },
+          NOT: { studentId },
+          page: { storyId: sessionBase.storyId },
+        },
+        select: {
+          id: true,
+          altText: true,
+          sortOrder: true,
+          studentId: true,
+          pageId: true,
+        },
+      }),
+    ]);
+  const availableStories: PublishedStoryOption[] = [];
 
   const studentOptions = [...studentOptionsRaw];
   // Pastikan murid sesi ada di opsi (mis. status berubah setelah sesi mulai).
@@ -551,71 +619,97 @@ export async function getSessionForReader(
     studentOptions.unshift(sessionBase.student);
   }
 
-  // Kumpulkan media yang terpilih untuk batch pre-signing signed URLs
-  const studentId = sessionBase.student.id;
+  const otherPortraitsByPage = new Map<
+    string,
+    Array<{
+      id: string;
+      altText: string | null;
+      sortOrder: number;
+      studentId: string;
+    }>
+  >();
+  for (const row of otherPortraits) {
+    if (!row.pageId || !row.studentId) continue;
+    const list = otherPortraitsByPage.get(row.pageId) ?? [];
+    list.push({
+      id: row.id,
+      altText: row.altText,
+      sortOrder: row.sortOrder,
+      studentId: row.studentId,
+    });
+    otherPortraitsByPage.set(row.pageId, list);
+  }
+
+  // Pre-sign hanya media tampil: shared + portrait murid aktif (+ MCQ batch).
   const mediaToSign = new Map<string, { key: string; bucket: string }>();
+  const mcqKeys: string[] = [];
 
   for (const page of pages) {
-    const imagesAll = page.media.filter((m) => m.kind === MediaKind.IMAGE);
-    const personalized = imagesAll.filter((m) => m.studentId === studentId);
-    const shared = imagesAll.filter((m) => m.studentId == null);
-    const sharedAudio = page.media.filter(
-      (m) => m.kind === MediaKind.AUDIO && m.studentId == null,
-    );
-
-    if (personalized[0]) {
-      mediaToSign.set(personalized[0].id, {
-        key: personalized[0].storageKey,
-        bucket: personalized[0].storageBucket || "cermin-media",
-      });
+    // Urutan deterministik: portrait murid aktif dulu, lalu shared.
+    for (const m of page.media) {
+      if (m.kind === MediaKind.IMAGE && m.studentId === studentId) {
+        mediaToSign.set(m.id, {
+          key: m.storageKey,
+          bucket: m.storageBucket || "cermin-media",
+        });
+      }
     }
-    for (const img of shared) {
-      mediaToSign.set(img.id, {
-        key: img.storageKey,
-        bucket: img.storageBucket || "cermin-media",
-      });
+    for (const m of page.media) {
+      if (m.studentId == null) {
+        mediaToSign.set(m.id, {
+          key: m.storageKey,
+          bucket: m.storageBucket || "cermin-media",
+        });
+      }
     }
-    for (const aud of sharedAudio) {
-      mediaToSign.set(aud.id, {
-        key: aud.storageKey,
-        bucket: aud.storageBucket || "cermin-media",
-      });
+    if (page.mcq) {
+      if (page.mcq.promptImageKey) mcqKeys.push(page.mcq.promptImageKey);
+      for (const c of page.mcq.choices) {
+        if (c.imageKey) mcqKeys.push(c.imageKey);
+      }
     }
   }
 
   const signedUrlMap = new Map<string, string>();
-  if (mediaToSign.size > 0) {
-    try {
-      const supabase = getSupabaseAdmin();
-      const byBucket = new Map<string, Array<{ id: string; key: string }>>();
-      for (const [id, item] of mediaToSign.entries()) {
-        const list = byBucket.get(item.bucket) ?? [];
-        list.push({ id, key: item.key });
-        byBucket.set(item.bucket, list);
-      }
-
-      await Promise.all(
-        Array.from(byBucket.entries()).map(async ([bucket, items]) => {
-          const keys = items.map((x) => x.key);
-          const { data, error } = await supabase.storage
-            .from(bucket)
-            .createSignedUrls(keys, 300);
-
-          if (!error && data) {
-            for (let i = 0; i < data.length; i++) {
-              const res = data[i];
-              const itemRef = items[i];
-              if (res?.signedUrl && itemRef) {
-                signedUrlMap.set(itemRef.id, res.signedUrl);
+  const [mcqUrlMap] = await Promise.all([
+    createMcqImagesSignedUrlMap(mcqKeys, 300),
+    (async () => {
+      if (mediaToSign.size === 0) return;
+      try {
+        const supabase = getSupabaseAdmin();
+        const byBucket = new Map<string, Array<{ id: string; key: string }>>();
+        for (const [id, item] of mediaToSign.entries()) {
+          const list = byBucket.get(item.bucket) ?? [];
+          list.push({ id, key: item.key });
+          byBucket.set(item.bucket, list);
+        }
+        await Promise.all(
+          Array.from(byBucket.entries()).map(async ([bucket, items]) => {
+            const keys = items.map((x) => x.key);
+            const { data, error } = await supabase.storage
+              .from(bucket)
+              .createSignedUrls(keys, 300);
+            if (!error && data) {
+              const byKey = new Map(items.map((x) => [x.key, x.id]));
+              for (let i = 0; i < data.length; i++) {
+                const res = data[i] as {
+                  signedUrl?: string;
+                  path?: string;
+                } | null;
+                if (!res?.signedUrl) continue;
+                const idFromPath =
+                  typeof res.path === "string" ? byKey.get(res.path) : undefined;
+                const id = idFromPath ?? items[i]?.id;
+                if (id) signedUrlMap.set(id, res.signedUrl);
               }
             }
-          }
-        }),
-      );
-    } catch {
-      // Fallback aman: jika storage API gagal, url tetap null dan klien akan mengambil via /api/media/[id]
-    }
-  }
+          }),
+        );
+      } catch {
+        // klien fallback /api/media/[id]
+      }
+    })(),
+  ]);
 
   const toRef = (m: {
     id: string;
@@ -626,6 +720,68 @@ export async function getSessionForReader(
     altText: m.altText,
     sortOrder: m.sortOrder,
     url: signedUrlMap.get(m.id) ?? null,
+  });
+
+  const pagesWithMcq: SessionReaderPage[] = pages.map((page) => {
+    const imagesAll = page.media.filter((m) => m.kind === MediaKind.IMAGE);
+    const personalized = imagesAll.filter((m) => m.studentId === studentId);
+    const shared = imagesAll.filter((m) => m.studentId == null);
+    const sharedAudio = page.media.filter(
+      (m) => m.kind === MediaKind.AUDIO && m.studentId == null,
+    );
+
+    const portraitsByStudentId: Record<string, SessionMediaRef> = {};
+    for (const img of imagesAll) {
+      if (img.studentId == null) continue;
+      const existing = portraitsByStudentId[img.studentId];
+      if (!existing || img.sortOrder < existing.sortOrder) {
+        portraitsByStudentId[img.studentId] = {
+          id: img.id,
+          altText: img.altText,
+          sortOrder: img.sortOrder,
+          url: signedUrlMap.get(img.id) ?? null,
+        };
+      }
+    }
+    for (const img of otherPortraitsByPage.get(page.id) ?? []) {
+      const existing = portraitsByStudentId[img.studentId];
+      if (!existing || img.sortOrder < existing.sortOrder) {
+        portraitsByStudentId[img.studentId] = {
+          id: img.id,
+          altText: img.altText,
+          sortOrder: img.sortOrder,
+          url: null,
+        };
+      }
+    }
+
+    let mcq: SessionPageMcq | null = null;
+    if (page.mcq) {
+      mcq = {
+        id: page.mcq.id,
+        prompt: page.mcq.prompt,
+        promptImageUrl: page.mcq.promptImageKey
+          ? (mcqUrlMap.get(page.mcq.promptImageKey) ?? null)
+          : null,
+        choices: page.mcq.choices.map((c) => ({
+          key: c.key,
+          labelText: c.labelText,
+          imageUrl: c.imageKey ? (mcqUrlMap.get(c.imageKey) ?? null) : null,
+        })),
+        selectedKey: page.mcq.responses[0]?.selectedKey ?? null,
+      };
+    }
+
+    return {
+      id: page.id,
+      sortOrder: page.sortOrder,
+      bodyText: page.bodyText,
+      portraitImage: personalized[0] ? toRef(personalized[0]) : null,
+      portraitsByStudentId,
+      storyImages: shared.map(toRef),
+      storyAudios: sharedAudio.map(toRef),
+      mcq,
+    };
   });
 
   return {
@@ -640,42 +796,7 @@ export async function getSessionForReader(
       categoryName: sessionBase.story.category.name,
     },
     availableStories,
-    pages: pages.map((page) => {
-      const imagesAll = page.media.filter((m) => m.kind === MediaKind.IMAGE);
-      const personalized = imagesAll.filter((m) => m.studentId === studentId);
-      const shared = imagesAll.filter((m) => m.studentId == null);
-      const sharedAudio = page.media.filter(
-        (m) => m.kind === MediaKind.AUDIO && m.studentId == null,
-      );
-
-      const portraitsByStudentId: Record<string, SessionMediaRef> = {};
-      for (const img of imagesAll) {
-        if (img.studentId == null) continue;
-        const existing = portraitsByStudentId[img.studentId];
-        if (!existing || img.sortOrder < existing.sortOrder) {
-          // Jangan pre-sign semua murid — hemat round-trip; ganti murid = fetch on demand.
-          portraitsByStudentId[img.studentId] = {
-            id: img.id,
-            altText: img.altText,
-            sortOrder: img.sortOrder,
-            url:
-              img.studentId === studentId
-                ? (signedUrlMap.get(img.id) ?? null)
-                : null,
-          };
-        }
-      }
-
-      return {
-        id: page.id,
-        sortOrder: page.sortOrder,
-        bodyText: page.bodyText,
-        portraitImage: personalized[0] ? toRef(personalized[0]) : null,
-        portraitsByStudentId,
-        storyImages: shared.map(toRef),
-        storyAudios: sharedAudio.map(toRef),
-      };
-    }),
+    pages: pagesWithMcq,
     observations,
     preference,
   };

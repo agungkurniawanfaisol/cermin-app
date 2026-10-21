@@ -145,11 +145,13 @@ export async function loadStudentAccessCtx(
     role === "TERAPIS"
       ? prisma.therapistAssignment.findFirst({
           where: { therapistId: userId, studentId, endedAt: null },
+          select: { id: true },
         })
       : null,
     role === "ORANG_TUA"
       ? prisma.parentLink.findFirst({
           where: { parentId: userId, studentId, isActive: true },
+          select: { id: true },
         })
       : null,
   ]);
@@ -193,27 +195,38 @@ export async function assertCanAccessGuide(
   if (!canAccessGuideDocument(user, guide)) throw new AuthzError();
 }
 
+/** Deduped per RSC request — keyed by id/role/status (bukan object identity). */
+const userHasAnyStudentAccessCached = cache(
+  async (
+    userId: string,
+    role: PolicyUser["role"],
+    status: PolicyUser["status"],
+  ): Promise<boolean> => {
+    if (status !== "ACTIVE") return false;
+    if (role === "ADMIN") return true;
+    if (role === "TERAPIS") {
+      const row = await prisma.therapistAssignment.findFirst({
+        where: { therapistId: userId, endedAt: null },
+        select: { id: true },
+      });
+      return Boolean(row);
+    }
+    if (role === "ORANG_TUA") {
+      const row = await prisma.parentLink.findFirst({
+        where: { parentId: userId, isActive: true },
+        select: { id: true },
+      });
+      return Boolean(row);
+    }
+    return false;
+  },
+);
+
 /** True if Admin, or Terapis/Ortu with at least one active student relation. */
 export async function userHasAnyStudentAccess(
   user: PolicyUser,
 ): Promise<boolean> {
-  if (user.status !== "ACTIVE") return false;
-  if (user.role === "ADMIN") return true;
-  if (user.role === "TERAPIS") {
-    const row = await prisma.therapistAssignment.findFirst({
-      where: { therapistId: user.id, endedAt: null },
-      select: { id: true },
-    });
-    return Boolean(row);
-  }
-  if (user.role === "ORANG_TUA") {
-    const row = await prisma.parentLink.findFirst({
-      where: { parentId: user.id, isActive: true },
-      select: { id: true },
-    });
-    return Boolean(row);
-  }
-  return false;
+  return userHasAnyStudentAccessCached(user.id, user.role, user.status);
 }
 
 /** Admin (non-archived) or Terapis on own DRAFT. */
@@ -251,17 +264,28 @@ export function canEditStoryContent(
   }
 }
 
+export type MediaForSignedUrl = {
+  id: string;
+  storageBucket: string;
+  storageKey: string;
+  studentId: string | null;
+};
+
 /**
- * MVP media access: Admin; story editor; or user with any student access
- * when story is PUBLISHED (learning content).
+ * Satu query: authz media + field storage untuk signed URL.
+ * Admin; editor cerita; atau akses murid + cerita PUBLISHED.
  */
-export async function assertCanAccessMedia(
+export async function loadMediaForSignedUrl(
   user: PolicyUser,
   mediaId: string,
-): Promise<void> {
+): Promise<MediaForSignedUrl> {
   const media = await prisma.mediaAsset.findUnique({
     where: { id: mediaId },
-    include: {
+    select: {
+      id: true,
+      storageBucket: true,
+      storageKey: true,
+      studentId: true,
       story: { select: { id: true, status: true, createdById: true } },
       page: {
         select: {
@@ -276,23 +300,38 @@ export async function assertCanAccessMedia(
   const story = media.story ?? media.page?.story ?? null;
   if (!story) throw new AuthzError("Media tidak terkait cerita", 404);
 
-  if (user.role === "ADMIN") return;
+  const allow = async (): Promise<boolean> => {
+    if (user.role === "ADMIN") return true;
+    if (canEditStoryContent(user, story)) return true;
+    if (media.studentId) {
+      if (story.status !== StoryStatus.PUBLISHED) return false;
+      try {
+        await assertCanAccessStudent(user, media.studentId);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return (
+      story.status === StoryStatus.PUBLISHED &&
+      (await userHasAnyStudentAccess(user))
+    );
+  };
 
-  if (canEditStoryContent(user, story)) return;
+  if (!(await allow())) throw new AuthzError();
 
-  // Personalized image: only adults who can access that student.
-  if (media.studentId) {
-    if (story.status !== StoryStatus.PUBLISHED) throw new AuthzError();
-    await assertCanAccessStudent(user, media.studentId);
-    return;
-  }
+  return {
+    id: media.id,
+    storageBucket: media.storageBucket,
+    storageKey: media.storageKey,
+    studentId: media.studentId,
+  };
+}
 
-  if (
-    story.status === StoryStatus.PUBLISHED &&
-    (await userHasAnyStudentAccess(user))
-  ) {
-    return;
-  }
-
-  throw new AuthzError();
+/** @deprecated Prefer loadMediaForSignedUrl agar tidak double-query. */
+export async function assertCanAccessMedia(
+  user: PolicyUser,
+  mediaId: string,
+): Promise<void> {
+  await loadMediaForSignedUrl(user, mediaId);
 }

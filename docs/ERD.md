@@ -23,17 +23,17 @@ erDiagram
   StoryCategory ||--o{ Story : "contains"
   Story ||--o{ StoryPage : "pages"
   Story ||--o{ StoryVersion : "versions"
-  Story ||--o{ StoryEvaluation : "evaluations"
-  StoryEvaluation ||--o{ EvaluationItem : "items"
   Story ||--o{ MediaAsset : "story_media"
   StoryPage ||--o{ MediaAsset : "page_media"
+  StoryPage ||--o| PageMcq : "mcq"
+  PageMcq ||--o{ PageMcqChoice : "choices"
 
   Student ||--o{ LearningSession : "sessions"
   Story ||--o{ LearningSession : "story"
   User ||--o{ LearningSession : "led_by"
   LearningSession ||--o{ SessionObservation : "observations"
-  LearningSession ||--o{ SessionEvaluationResponse : "responses"
-  EvaluationItem ||--o{ SessionEvaluationResponse : "item"
+  LearningSession ||--o{ SessionMcqResponse : "mcq_responses"
+  PageMcq ||--o{ SessionMcqResponse : "responses"
 ```
 
 ## 2. Cardinality summary
@@ -45,8 +45,8 @@ erDiagram
 | Category → Story        | 1:N         | Many stories per category                      |
 | Story → Page            | 1:N         | Ordered `sort_order`                           |
 | Story/Page → Media      | 1:N         | Files in Storage; DB holds metadata            |
-| Story → Evaluation      | 1:N         | Multiple evaluations                           |
-| Evaluation → Item       | 1:N         | Multiple items                                 |
+| Page → PageMcq          | 1:0..1      | Optional one MCQ (A–D) per page                |
+| PageMcq → Choice        | 1:4         | Keys A–D                                       |
 | Student+Story → Session | 1:N         | Repeated learning sessions                     |
 | Session → Observation   | 1:N         |                                                |
 | Session → Eval response | 1:N         | Per item per session                           |
@@ -163,12 +163,14 @@ erDiagram
 
 Constraint: at least one of `story_id` / `page_id` set. **Never store public URL as source of truth.**
 
-### StoryEvaluation / EvaluationItem
+### PageMcq / PageMcqChoice
 
-| Entity          | Key fields                                       |
-| --------------- | ------------------------------------------------ |
-| StoryEvaluation | id, story_id, title, description, sort_order     |
-| EvaluationItem  | id, evaluation_id, prompt, item_type, sort_order |
+| Entity         | Key fields                                                          |
+| -------------- | ------------------------------------------------------------------- |
+| PageMcq        | id, page_id (unique), prompt, prompt_image_key, correct_key (A–D)   |
+| PageMcqChoice  | id, mcq_id, key (A–D), label_text, image_key; unique (mcq_id, key) |
+
+Gambar soal/opsi: Storage privat (`prompt_image_key` / `image_key`), signed URL setelah authz.
 
 ### LearningSession
 
@@ -192,16 +194,15 @@ Constraint: at least one of `story_id` / `page_id` set. **Never store public URL
 | note        | text           |       |
 | recorded_at | timestamptz    |       |
 
-### SessionEvaluationResponse
+### SessionMcqResponse
 
-| Column             | Type                             | Notes                   |
-| ------------------ | -------------------------------- | ----------------------- |
-| id                 | UUID PK                          |                         |
-| session_id         | UUID FK                          |                         |
-| evaluation_item_id | UUID FK                          |                         |
-| value              | text/jsonb                       | flexible for item types |
-| note               | text                             | optional                |
-| Unique             | (session_id, evaluation_item_id) |                         |
+| Column       | Type                        | Notes                |
+| ------------ | --------------------------- | -------------------- |
+| id           | UUID PK                     |                      |
+| session_id   | UUID FK                     |                      |
+| page_mcq_id  | UUID FK                     |                      |
+| selected_key | text (A–D)                  | pilihan di /belajar  |
+| Unique       | (session_id, page_mcq_id)   | satu jawaban per soal |
 
 ### InviteToken / UserPreference / AuditLog
 

@@ -13,10 +13,14 @@ type ObservationItem = {
 
 export function ObservationPanel({
   sessionId,
+  studentId,
+  studentName,
   observations,
   disabled,
 }: {
   sessionId: string;
+  studentId: string;
+  studentName?: string;
   observations: ObservationItem[];
   disabled?: boolean;
 }) {
@@ -30,7 +34,7 @@ export function ObservationPanel({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await addObservation({ sessionId, note });
+      const result = await addObservation({ sessionId, studentId, note });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -59,6 +63,14 @@ export function ObservationPanel({
             </p>
           ) : (
             <form onSubmit={onSave} className="space-y-3">
+              {studentName ? (
+                <p className="text-sm text-[#5c6b73]">
+                  Untuk murid:{" "}
+                  <span className="font-semibold text-[#1f2933]">
+                    {studentName}
+                  </span>
+                </p>
+              ) : null}
               <label htmlFor="observation-note" className="block font-medium">
                 Catatan observasi
               </label>

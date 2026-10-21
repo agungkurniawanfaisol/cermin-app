@@ -6,8 +6,8 @@ import { SessionListSkeleton } from "@/components/dashboard/session-list-skeleto
 import type { ListQueryInput } from "@/lib/list-query";
 import { listActiveStudentsForSession } from "@/server/actions/students";
 import {
+  countPublishedStoriesForSession,
   listLearningSessionsForViewer,
-  listPublishedStoriesForSession,
 } from "@/server/actions/sessions";
 import { requireSession } from "@/server/policies/access";
 import { CalmSenseBackdrop } from "@/components/calm/calm-sense-backdrop";
@@ -75,14 +75,14 @@ function SesiBodySkeleton() {
 }
 
 async function MulaiPanel() {
-  const [students, stories] = await Promise.all([
+  const [students, publishedCount] = await Promise.all([
     listActiveStudentsForSession(),
-    listPublishedStoriesForSession(),
+    countPublishedStoriesForSession(),
   ]);
   return (
     <SessionStartEntry
       hasStudents={students.length > 0}
-      hasPublishedStories={stories.length > 0}
+      hasPublishedStories={publishedCount > 0}
     />
   );
 }

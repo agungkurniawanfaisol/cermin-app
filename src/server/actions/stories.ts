@@ -32,7 +32,9 @@ import {
   createPageSchema,
   createStorySchema,
   pageIdSchema,
+  publishSnapshotSchema,
   reorderPagesSchema,
+  restoreStoryVersionSchema,
   storyIdSchema,
   transitionStoryStatusSchema,
   updatePageSchema,
@@ -40,6 +42,7 @@ import {
   type CreatePageInput,
   type CreateStoryInput,
   type ReorderPagesInput,
+  type RestoreStoryVersionInput,
   type TransitionStoryStatusInput,
   type UpdatePageInput,
   type UpdateStoryInput,
@@ -332,10 +335,30 @@ export type StoryPageMedia = {
   student: { id: string; displayName: string } | null;
 };
 
+export type StoryPageMcqChoice = {
+  id: string;
+  key: string;
+  labelText: string;
+  imageKey: string | null;
+};
+
+export type StoryPageMcq = {
+  id: string;
+  prompt: string;
+  promptImageKey: string | null;
+  correctKey: string;
+  choices: StoryPageMcqChoice[];
+};
+
 export type StoryDetail = Story & {
   category: { id: string; name: string };
   createdBy: { id: string; name: string; email: string };
-  pages: Array<StoryPage & { media: StoryPageMedia[] }>;
+  pages: Array<
+    StoryPage & {
+      media: StoryPageMedia[];
+      mcq: StoryPageMcq | null;
+    }
+  >;
 };
 
 /** Shell ringan untuk header + progres langkah (tanpa media penuh). */
@@ -388,12 +411,7 @@ export async function getStoryEditorShell(
         take: 1,
         select: { id: true },
       },
-      pages: {
-        select: {
-          bodyText: true,
-          _count: { select: { media: true } },
-        },
-      },
+      _count: { select: { pages: true } },
     },
   });
 
@@ -402,11 +420,21 @@ export async function getStoryEditorShell(
     throw new AuthzError();
   }
 
-  const pageCount = story.pages.length;
-  const pagesWithText = story.pages.filter(
-    (p) => p.bodyText.trim().length > 0,
-  ).length;
-  const pagesWithMedia = story.pages.filter((p) => p._count.media > 0).length;
+  const [pagesWithTextRows, pagesWithMedia] = await Promise.all([
+    prisma.$queryRaw<Array<{ c: bigint }>>`
+      SELECT COUNT(*)::bigint AS c
+      FROM "story_pages"
+      WHERE "storyId" = ${story.id}
+        AND length(trim("bodyText")) > 0
+    `,
+    prisma.storyPage.count({
+      where: {
+        storyId: story.id,
+        media: { some: {} },
+      },
+    }),
+  ]);
+  const pagesWithText = Number(pagesWithTextRows[0]?.c ?? 0);
 
   return {
     id: story.id,
@@ -419,7 +447,7 @@ export async function getStoryEditorShell(
     updatedAt: story.updatedAt,
     category: story.category,
     createdBy: story.createdBy,
-    pageCount,
+    pageCount: story._count.pages,
     pagesWithText,
     pagesWithMedia,
     coverMediaId: story.media[0]?.id ?? null,
@@ -454,6 +482,23 @@ export async function getStoryDetail(storyId: string): Promise<StoryDetail> {
               sortOrder: true,
               studentId: true,
               student: { select: { id: true, displayName: true } },
+            },
+          },
+          mcq: {
+            select: {
+              id: true,
+              prompt: true,
+              promptImageKey: true,
+              correctKey: true,
+              choices: {
+                orderBy: { key: "asc" },
+                select: {
+                  id: true,
+                  key: true,
+                  labelText: true,
+                  imageKey: true,
+                },
+              },
             },
           },
         },
@@ -855,6 +900,17 @@ export async function reorderStoryPages(
   }
 }
 
+type SnapshotMcq = {
+  prompt: string;
+  promptImageKey: string | null;
+  correctKey: string;
+  choices: Array<{
+    key: string;
+    labelText: string;
+    imageKey: string | null;
+  }>;
+};
+
 type SnapshotPage = {
   id: string;
   sortOrder: number;
@@ -867,7 +923,9 @@ type SnapshotPage = {
     altText: string | null;
     sortOrder: number;
     storageKey: string;
+    studentId: string | null;
   }>;
+  mcq: SnapshotMcq | null;
 };
 
 function buildPublishSnapshot(story: {
@@ -885,14 +943,29 @@ function buildPublishSnapshot(story: {
       sortOrder: p.sortOrder,
       title: p.title,
       bodyText: p.bodyText,
-      media: p.media.map((m) => ({
-        id: m.id,
-        kind: m.kind,
-        mimeType: m.mimeType,
-        altText: m.altText,
-        sortOrder: m.sortOrder,
-        storageKey: m.storageKey,
-      })),
+      // Snapshot hanya media shared (studentId null) + MCQ.
+      media: p.media
+        .filter((m) => m.studentId == null)
+        .map((m) => ({
+          id: m.id,
+          kind: m.kind,
+          mimeType: m.mimeType,
+          altText: m.altText,
+          sortOrder: m.sortOrder,
+          storageKey: m.storageKey,
+        })),
+      mcq: p.mcq
+        ? {
+            prompt: p.mcq.prompt,
+            promptImageKey: p.mcq.promptImageKey,
+            correctKey: p.mcq.correctKey,
+            choices: p.mcq.choices.map((c) => ({
+              key: c.key,
+              labelText: c.labelText,
+              imageKey: c.imageKey,
+            })),
+          }
+        : null,
     })),
   };
 }
@@ -916,7 +989,33 @@ export async function transitionStoryStatus(
         pages: {
           orderBy: { sortOrder: "asc" },
           include: {
-            media: { orderBy: { sortOrder: "asc" } },
+            media: {
+              orderBy: { sortOrder: "asc" },
+              select: {
+                id: true,
+                kind: true,
+                mimeType: true,
+                altText: true,
+                sortOrder: true,
+                storageKey: true,
+                studentId: true,
+              },
+            },
+            mcq: {
+              select: {
+                prompt: true,
+                promptImageKey: true,
+                correctKey: true,
+                choices: {
+                  orderBy: { key: "asc" },
+                  select: {
+                    key: true,
+                    labelText: true,
+                    imageKey: true,
+                  },
+                },
+              },
+            },
           },
         },
         versions: {
@@ -990,6 +1089,194 @@ export async function transitionStoryStatus(
     return {
       ok: false,
       error: toActionError(error, "Gagal mengubah status cerita"),
+    };
+  }
+}
+
+export type ListedStoryVersion = {
+  id: string;
+  versionNo: number;
+  createdAt: Date;
+  createdBy: { id: string; name: string };
+};
+
+/** Riwayat versi terbit — tanpa snapshotJson (berat). */
+export async function listStoryVersions(
+  storyId: string,
+): Promise<ListedStoryVersion[]> {
+  const parsed = storyIdSchema.safeParse({ storyId });
+  if (!parsed.success) throw new AuthzError("Cerita tidak ditemukan", 404);
+
+  const user = await requireSession();
+  const story = await prisma.story.findUnique({
+    where: { id: parsed.data.storyId },
+    select: { id: true, status: true, createdById: true },
+  });
+  if (!story) throw new AuthzError("Cerita tidak ditemukan", 404);
+  if (user.role === "ORANG_TUA" && story.status !== StoryStatus.PUBLISHED) {
+    throw new AuthzError();
+  }
+
+  return prisma.storyVersion.findMany({
+    where: { storyId: story.id },
+    orderBy: { versionNo: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      versionNo: true,
+      createdAt: true,
+      createdBy: { select: { id: true, name: true } },
+    },
+  });
+}
+
+/**
+ * Pulihkan snapshot versi terbit → konten draf.
+ * Mengganti teks halaman + MCQ; halaman di luar snapshot dihapus.
+ * Media personalisasi pada halaman yang dihapus ikut hilang (CASCADE).
+ */
+export async function restoreStoryVersion(
+  input: RestoreStoryVersionInput,
+): Promise<ActionResult<{ storyId: string; versionNo: number }>> {
+  try {
+    const user = await requireSession();
+    const parsed = restoreStoryVersionSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const story = await prisma.story.findUnique({
+      where: { id: parsed.data.storyId },
+      select: {
+        id: true,
+        status: true,
+        createdById: true,
+        pages: { select: { id: true } },
+      },
+    });
+    if (!story) return { ok: false, error: "Cerita tidak ditemukan" };
+
+    if (user.role === "ADMIN") {
+      // Admin boleh pulihkan termasuk dari arsip.
+    } else {
+      try {
+        assertCanEditStoryContent(user, story);
+      } catch {
+        return { ok: false, error: "Tidak diizinkan memulihkan versi" };
+      }
+    }
+
+    const version = await prisma.storyVersion.findFirst({
+      where: {
+        id: parsed.data.versionId,
+        storyId: story.id,
+      },
+      select: {
+        id: true,
+        versionNo: true,
+        snapshotJson: true,
+      },
+    });
+    if (!version) return { ok: false, error: "Versi tidak ditemukan" };
+
+    const snap = publishSnapshotSchema.safeParse(version.snapshotJson);
+    if (!snap.success) {
+      return { ok: false, error: "Snapshot versi tidak valid" };
+    }
+
+    const snapshotPageIds = new Set(snap.data.pages.map((p) => p.id));
+    const orphanPageIds = story.pages
+      .map((p) => p.id)
+      .filter((id) => !snapshotPageIds.has(id));
+
+    await prisma.$transaction(async (tx) => {
+      await tx.story.update({
+        where: { id: story.id },
+        data: {
+          title: snap.data.title,
+          description: snap.data.description,
+          learningObjectives: snap.data.learningObjectives,
+          status: StoryStatus.DRAFT,
+        },
+      });
+
+      if (orphanPageIds.length > 0) {
+        await tx.storyPage.deleteMany({
+          where: { id: { in: orphanPageIds }, storyId: story.id },
+        });
+      }
+
+      for (const page of snap.data.pages) {
+        const existing = await tx.storyPage.findFirst({
+          where: { id: page.id, storyId: story.id },
+          select: { id: true },
+        });
+
+        if (existing) {
+          await tx.storyPage.update({
+            where: { id: page.id },
+            data: {
+              sortOrder: page.sortOrder,
+              title: page.title,
+              bodyText: page.bodyText,
+            },
+          });
+        } else {
+          await tx.storyPage.create({
+            data: {
+              id: page.id,
+              storyId: story.id,
+              sortOrder: page.sortOrder,
+              title: page.title,
+              bodyText: page.bodyText,
+            },
+          });
+        }
+
+        await tx.pageMcq.deleteMany({ where: { pageId: page.id } });
+        if (page.mcq) {
+          await tx.pageMcq.create({
+            data: {
+              pageId: page.id,
+              prompt: page.mcq.prompt,
+              promptImageKey: page.mcq.promptImageKey,
+              correctKey: page.mcq.correctKey,
+              choices: {
+                create: page.mcq.choices.map((c) => ({
+                  key: c.key,
+                  labelText: c.labelText,
+                  imageKey: c.imageKey,
+                })),
+              },
+            },
+          });
+        }
+      }
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "story.version.restore",
+      entityType: "StoryVersion",
+      entityId: version.id,
+      metadata: {
+        storyId: story.id,
+        versionNo: version.versionNo,
+      },
+    });
+
+    revalidateStoryPaths(story.id);
+    return {
+      ok: true,
+      data: { storyId: story.id, versionNo: version.versionNo },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toActionError(error, "Gagal memulihkan versi cerita"),
     };
   }
 }

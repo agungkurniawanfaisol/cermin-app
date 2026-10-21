@@ -20,6 +20,7 @@ import {
 import { ChangeStoryDialog } from "./change-story-dialog";
 import { EvaluationPanel } from "./evaluation-panel";
 import { ObservationPanel } from "./observation-panel";
+import { PageMcqBlock } from "./page-mcq";
 import { PageAudioButton, PageImage } from "./page-media";
 
 /** Ambang geser horizontal (px) — seperti membuka halaman buku. */
@@ -49,14 +50,18 @@ function resolvePortrait(
 
 function StoryPageSlide({
   page,
+  sessionId,
   studentId,
   bodyClass,
   showAudio,
+  sessionEnded,
 }: {
   page: SessionReaderPage;
+  sessionId: string;
   studentId: string;
   bodyClass: string;
   showAudio: boolean;
+  sessionEnded: boolean;
 }) {
   const portrait = resolvePortrait(page, studentId);
   const hasStoryMedia =
@@ -107,6 +112,15 @@ function StoryPageSlide({
               : null}
           </div>
         ) : null}
+
+        {page.mcq ? (
+          <PageMcqBlock
+            sessionId={sessionId}
+            studentId={studentId}
+            mcq={page.mcq}
+            disabled={sessionEnded}
+          />
+        ) : null}
       </div>
     </article>
   );
@@ -128,6 +142,10 @@ export function SessionReader({ session }: { session: SessionForReader }) {
   const [studentId, setStudentId] = useState(session.student.id);
   const ended = Boolean(session.endedAt);
   const adultRef = useRef<HTMLDivElement>(null);
+
+  const selectedStudentName =
+    session.studentOptions.find((s) => s.id === studentId)?.displayName ??
+    session.student.displayName;
 
   const pages = session.pages;
   const total = pages.length;
@@ -359,9 +377,11 @@ export function SessionReader({ session }: { session: SessionForReader }) {
             <StoryPageSlide
               key={page.id}
               page={page}
+              sessionId={session.id}
               studentId={studentId}
               bodyClass={bodyClass}
               showAudio={showAudio}
+              sessionEnded={ended}
             />
           ))}
         </div>
@@ -432,7 +452,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             {!ended ? (
               <ChangeStoryDialog
-                studentId={session.student.id}
+                studentId={studentId}
                 currentStoryId={session.story.id}
                 stories={session.availableStories ?? []}
               />
@@ -458,11 +478,18 @@ export function SessionReader({ session }: { session: SessionForReader }) {
 
         <ObservationPanel
           sessionId={session.id}
+          studentId={studentId}
+          studentName={selectedStudentName}
           observations={session.observations}
           disabled={ended}
         />
 
-        <EvaluationPanel sessionId={session.id} disabled={ended} />
+        <EvaluationPanel
+          sessionId={session.id}
+          studentId={studentId}
+          studentName={selectedStudentName}
+          disabled={ended}
+        />
       </div>
     </main>
   );

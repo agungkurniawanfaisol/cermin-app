@@ -1,480 +1,413 @@
 "use server";
 
-import type {
-  EvaluationItem,
-  Prisma,
-  StoryEvaluation,
-} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import {
+  createMcqImageSignedUrl,
+  deleteMcqImageObject,
+  pageMcqChoiceKey,
+  pageMcqPromptKey,
+  uploadMcqImageObject,
+  validateMcqImageFile,
+} from "@/lib/mcq-storage";
 import {
   assertCanAccessStudent,
   assertCanEditStoryContent,
   AuthzError,
   requireSession,
 } from "@/server/policies/access";
+import { ensureSessionStudent } from "@/server/sessions/ensure-session-student";
 import {
-  createEvaluationItemSchema,
-  createStoryEvaluationSchema,
-  deleteEvaluationItemSchema,
-  deleteStoryEvaluationSchema,
-  updateEvaluationItemSchema,
-  updateStoryEvaluationSchema,
-  upsertSessionEvaluationResponseSchema,
-  upsertStoryEvaluationSchema,
-  type CreateStoryEvaluationInput,
-  type UpsertSessionEvaluationResponseInput,
-  type UpsertStoryEvaluationInput,
+  deletePageMcqSchema,
+  MCQ_KEY_POOL,
+  upsertPageMcqSchema,
+  upsertSessionMcqResponseSchema,
+  type McqKey,
+  type UpsertPageMcqInput,
+  type UpsertSessionMcqResponseInput,
 } from "@/server/validations/evaluation";
 
 export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
 export type ActionResult<T> = ActionOk<T> | ActionErr;
 
-export type StoryEvaluationWithItems = StoryEvaluation & {
-  items: EvaluationItem[];
+export type PageMcqChoiceView = {
+  key: string;
+  labelText: string;
+  imageKey: string | null;
+  imageUrl: string | null;
 };
 
-async function loadStoryForEdit(storyId: string) {
-  const user = await requireSession();
-  const story = await prisma.story.findUnique({
-    where: { id: storyId },
-    select: { id: true, status: true, createdById: true },
-  });
-  if (!story) throw new AuthzError("Cerita tidak ditemukan", 404);
-  assertCanEditStoryContent(user, story);
-  return { user, story };
-}
-
-export async function listStoryEvaluations(
-  storyId: string,
-): Promise<StoryEvaluationWithItems[]> {
-  await requireSession();
-  return prisma.storyEvaluation.findMany({
-    where: { storyId },
-    orderBy: { sortOrder: "asc" },
-    include: {
-      items: { orderBy: { sortOrder: "asc" } },
-    },
-  });
-}
-
-/** Hanya jumlah — untuk progres langkah editor (hindari tarik semua item). */
-export async function countStoryEvaluations(storyId: string): Promise<number> {
-  await requireSession();
-  return prisma.storyEvaluation.count({ where: { storyId } });
-}
-
-/**
- * Upsert StoryEvaluation beserta seluruh butir EvaluationItem dalam satu transaksi.
- */
-export async function saveStoryEvaluation(
-  input: UpsertStoryEvaluationInput,
-): Promise<ActionResult<{ id: string }>> {
-  try {
-    const parsed = upsertStoryEvaluationSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Data evaluasi tidak valid",
-      };
-    }
-
-    const { storyId, evaluationId, title, description, items } = parsed.data;
-    const { user } = await loadStoryForEdit(storyId);
-
-    const savedId = await prisma.$transaction(async (tx) => {
-      let targetEvalId = evaluationId;
-
-      if (targetEvalId) {
-        const existing = await tx.storyEvaluation.findFirst({
-          where: { id: targetEvalId, storyId },
-          include: { items: true },
-        });
-        if (!existing) {
-          throw new Error("Evaluasi tidak ditemukan");
-        }
-
-        await tx.storyEvaluation.update({
-          where: { id: targetEvalId },
-          data: { title, description: description ?? "" },
-        });
-
-        const incomingItemIds = new Set(
-          items.filter((it) => it.id).map((it) => it.id!),
-        );
-
-        const toDelete = existing.items
-          .filter((it) => !incomingItemIds.has(it.id))
-          .map((it) => it.id);
-        if (toDelete.length > 0) {
-          await tx.evaluationItem.deleteMany({
-            where: { id: { in: toDelete } },
-          });
-        }
-
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i]!;
-          if (item.id && incomingItemIds.has(item.id)) {
-            await tx.evaluationItem.update({
-              where: { id: item.id },
-              data: {
-                prompt: item.prompt,
-                itemType: item.itemType,
-                sortOrder: item.sortOrder ?? i + 1,
-              },
-            });
-          } else {
-            await tx.evaluationItem.create({
-              data: {
-                evaluationId: targetEvalId,
-                prompt: item.prompt,
-                itemType: item.itemType,
-                sortOrder: item.sortOrder ?? i + 1,
-              },
-            });
-          }
-        }
-      } else {
-        const created = await tx.storyEvaluation.create({
-          data: {
-            storyId,
-            title,
-            description: description ?? "",
-            items: {
-              create: items.map((it, idx) => ({
-                prompt: it.prompt,
-                itemType: it.itemType,
-                sortOrder: it.sortOrder ?? idx + 1,
-              })),
-            },
-          },
-        });
-        targetEvalId = created.id;
-      }
-
-      return targetEvalId;
-    });
-
-    await writeAudit({
-      actorId: user.id,
-      action: "evaluation.save",
-      entityType: "StoryEvaluation",
-      entityId: savedId,
-      metadata: { storyId, title, itemCount: items.length },
-    });
-
-    revalidatePath(`/dashboard/cerita/${storyId}`);
-    return { ok: true, data: { id: savedId } };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toActionError(error, "Gagal menyimpan evaluasi"),
-    };
-  }
-}
-
-export async function createStoryEvaluation(
-  input: CreateStoryEvaluationInput,
-): Promise<ActionResult<StoryEvaluation>> {
-  try {
-    const parsed = createStoryEvaluationSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
-      };
-    }
-    const { user, story } = await loadStoryForEdit(parsed.data.storyId);
-
-    const maxSort = await prisma.storyEvaluation.aggregate({
-      where: { storyId: story.id },
-      _max: { sortOrder: true },
-    });
-
-    const row = await prisma.storyEvaluation.create({
-      data: {
-        storyId: story.id,
-        title: parsed.data.title,
-        description: parsed.data.description ?? "",
-        sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
-      },
-    });
-
-    await writeAudit({
-      actorId: user.id,
-      action: "story.evaluation.create",
-      entityType: "StoryEvaluation",
-      entityId: row.id,
-      metadata: { storyId: story.id },
-    });
-
-    revalidatePath(`/dashboard/cerita/${story.id}`);
-    return { ok: true, data: row };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toActionError(error, "Gagal membuat evaluasi"),
-    };
-  }
-}
-
-export async function updateStoryEvaluation(input: {
-  evaluationId: string;
-  title: string;
-  description?: string;
-}): Promise<ActionResult<StoryEvaluation>> {
-  try {
-    const parsed = updateStoryEvaluationSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
-      };
-    }
-    const existing = await prisma.storyEvaluation.findUnique({
-      where: { id: parsed.data.evaluationId },
-      include: {
-        story: { select: { id: true, status: true, createdById: true } },
-      },
-    });
-    if (!existing) throw new AuthzError("Evaluasi tidak ditemukan", 404);
-    const user = await requireSession();
-    assertCanEditStoryContent(user, existing.story);
-
-    const row = await prisma.storyEvaluation.update({
-      where: { id: existing.id },
-      data: {
-        title: parsed.data.title,
-        description: parsed.data.description ?? "",
-      },
-    });
-
-    await writeAudit({
-      actorId: user.id,
-      action: "story.evaluation.update",
-      entityType: "StoryEvaluation",
-      entityId: row.id,
-      metadata: { storyId: existing.storyId },
-    });
-
-    revalidatePath(`/dashboard/cerita/${existing.storyId}`);
-    return { ok: true, data: row };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toActionError(error, "Gagal memperbarui evaluasi"),
-    };
-  }
-}
-
-export async function deleteStoryEvaluation(input: {
-  evaluationId: string;
-}): Promise<ActionResult<{ id: string }>> {
-  try {
-    const parsed = deleteStoryEvaluationSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
-      };
-    }
-    const existing = await prisma.storyEvaluation.findUnique({
-      where: { id: parsed.data.evaluationId },
-      include: {
-        story: { select: { id: true, status: true, createdById: true } },
-      },
-    });
-    if (!existing) throw new AuthzError("Evaluasi tidak ditemukan", 404);
-    const user = await requireSession();
-    assertCanEditStoryContent(user, existing.story);
-
-    await prisma.storyEvaluation.delete({ where: { id: existing.id } });
-
-    await writeAudit({
-      actorId: user.id,
-      action: "story.evaluation.delete",
-      entityType: "StoryEvaluation",
-      entityId: existing.id,
-      metadata: { storyId: existing.storyId },
-    });
-
-    revalidatePath(`/dashboard/cerita/${existing.storyId}`);
-    return { ok: true, data: { id: existing.id } };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toActionError(error, "Gagal menghapus evaluasi"),
-    };
-  }
-}
-
-export async function createEvaluationItem(input: {
-  evaluationId: string;
+export type PageMcqEditorView = {
+  id: string;
+  pageId: string;
   prompt: string;
-  itemType?: "TEXT" | "SCALE";
-}): Promise<ActionResult<EvaluationItem>> {
-  try {
-    const parsed = createEvaluationItemSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
-      };
-    }
-    const evaluation = await prisma.storyEvaluation.findUnique({
-      where: { id: parsed.data.evaluationId },
-      include: {
-        story: { select: { id: true, status: true, createdById: true } },
-      },
-    });
-    if (!evaluation) throw new AuthzError("Evaluasi tidak ditemukan", 404);
-    const user = await requireSession();
-    assertCanEditStoryContent(user, evaluation.story);
+  promptImageKey: string | null;
+  promptImageUrl: string | null;
+  correctKey: string;
+  choices: PageMcqChoiceView[];
+};
 
-    const maxSort = await prisma.evaluationItem.aggregate({
-      where: { evaluationId: evaluation.id },
-      _max: { sortOrder: true },
-    });
-
-    const row = await prisma.evaluationItem.create({
-      data: {
-        evaluationId: evaluation.id,
-        prompt: parsed.data.prompt,
-        itemType: parsed.data.itemType ?? "TEXT",
-        sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
-      },
-    });
-
-    await writeAudit({
-      actorId: user.id,
-      action: "story.evaluation.item.create",
-      entityType: "EvaluationItem",
-      entityId: row.id,
-      metadata: { storyId: evaluation.storyId, evaluationId: evaluation.id },
-    });
-
-    revalidatePath(`/dashboard/cerita/${evaluation.storyId}`);
-    return { ok: true, data: row };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toActionError(error, "Gagal menambah item evaluasi"),
-    };
-  }
-}
-
-export async function updateEvaluationItem(input: {
-  itemId: string;
-  prompt: string;
-  itemType: "TEXT" | "SCALE";
-}): Promise<ActionResult<EvaluationItem>> {
-  try {
-    const parsed = updateEvaluationItemSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
-      };
-    }
-    const item = await prisma.evaluationItem.findUnique({
-      where: { id: parsed.data.itemId },
-      include: {
-        evaluation: {
-          include: {
-            story: { select: { id: true, status: true, createdById: true } },
-          },
-        },
-      },
-    });
-    if (!item) throw new AuthzError("Item tidak ditemukan", 404);
-    const user = await requireSession();
-    assertCanEditStoryContent(user, item.evaluation.story);
-
-    const row = await prisma.evaluationItem.update({
-      where: { id: item.id },
-      data: {
-        prompt: parsed.data.prompt,
-        itemType: parsed.data.itemType,
-      },
-    });
-
-    await writeAudit({
-      actorId: user.id,
-      action: "story.evaluation.item.update",
-      entityType: "EvaluationItem",
-      entityId: row.id,
-      metadata: { storyId: item.evaluation.storyId },
-    });
-
-    revalidatePath(`/dashboard/cerita/${item.evaluation.storyId}`);
-    return { ok: true, data: row };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toActionError(error, "Gagal memperbarui item"),
-    };
-  }
-}
-
-export async function deleteEvaluationItem(input: {
-  itemId: string;
-}): Promise<ActionResult<{ id: string }>> {
-  try {
-    const parsed = deleteEvaluationItemSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
-      };
-    }
-    const item = await prisma.evaluationItem.findUnique({
-      where: { id: parsed.data.itemId },
-      include: {
-        evaluation: {
-          include: {
-            story: { select: { id: true, status: true, createdById: true } },
-          },
-        },
-      },
-    });
-    if (!item) throw new AuthzError("Item tidak ditemukan", 404);
-    const user = await requireSession();
-    assertCanEditStoryContent(user, item.evaluation.story);
-
-    await prisma.evaluationItem.delete({ where: { id: item.id } });
-
-    await writeAudit({
-      actorId: user.id,
-      action: "story.evaluation.item.delete",
-      entityType: "EvaluationItem",
-      entityId: item.id,
-      metadata: { storyId: item.evaluation.storyId },
-    });
-
-    revalidatePath(`/dashboard/cerita/${item.evaluation.storyId}`);
-    return { ok: true, data: { id: item.id } };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toActionError(error, "Gagal menghapus item"),
-    };
-  }
-}
-
-export type SessionEvalItemView = {
+/** Child-safe: no correctKey. */
+export type PageMcqReaderView = {
   id: string;
   prompt: string;
-  itemType: string;
-  evaluationTitle: string;
-  response: { value: Prisma.JsonValue; note: string | null } | null;
+  promptImageUrl: string | null;
+  choices: Array<{
+    key: string;
+    labelText: string;
+    imageUrl: string | null;
+  }>;
+  /** Existing answer for this session, if any. */
+  selectedKey: string | null;
 };
 
-export async function listSessionEvaluationItems(
+export type SessionMcqSummaryRow = {
+  pageMcqId: string;
+  pageId: string;
+  pageSortOrder: number;
+  prompt: string;
+  correctKey: string;
+  selectedKey: string | null;
+  choices: Array<{ key: string; labelText: string }>;
+};
+
+async function signKey(key: string | null | undefined): Promise<string | null> {
+  if (!key) return null;
+  const signed = await createMcqImageSignedUrl(key);
+  return signed.ok ? signed.url : null;
+}
+
+async function loadPageForEdit(pageId: string) {
+  const user = await requireSession();
+  const page = await prisma.storyPage.findUnique({
+    where: { id: pageId },
+    select: {
+      id: true,
+      storyId: true,
+      story: { select: { id: true, status: true, createdById: true } },
+    },
+  });
+  if (!page) throw new AuthzError("Halaman tidak ditemukan", 404);
+  assertCanEditStoryContent(user, page.story);
+  return { user, page };
+}
+
+export async function getPageMcq(
+  pageId: string,
+): Promise<PageMcqEditorView | null> {
+  await requireSession();
+  const mcq = await prisma.pageMcq.findUnique({
+    where: { pageId },
+    include: { choices: { orderBy: { key: "asc" } } },
+  });
+  if (!mcq) return null;
+
+  const promptImageUrl = await signKey(mcq.promptImageKey);
+  const choices: PageMcqChoiceView[] = await Promise.all(
+    mcq.choices.map(async (c) => ({
+      key: c.key,
+      labelText: c.labelText,
+      imageKey: c.imageKey,
+      imageUrl: await signKey(c.imageKey),
+    })),
+  );
+
+  return {
+    id: mcq.id,
+    pageId: mcq.pageId,
+    prompt: mcq.prompt,
+    promptImageKey: mcq.promptImageKey,
+    promptImageUrl,
+    correctKey: mcq.correctKey,
+    choices,
+  };
+}
+
+export async function upsertPageMcq(
+  input: UpsertPageMcqInput,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const parsed = upsertPageMcqSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data soal tidak valid",
+      };
+    }
+    const { pageId, prompt, correctKey, choices, promptImageKey } = parsed.data;
+    const { user, page } = await loadPageForEdit(pageId);
+
+    const existing = await prisma.pageMcq.findUnique({
+      where: { pageId },
+      include: { choices: true },
+    });
+
+    const nextPromptKey =
+      promptImageKey === undefined
+        ? (existing?.promptImageKey ?? null)
+        : promptImageKey;
+
+    if (
+      existing?.promptImageKey &&
+      nextPromptKey !== existing.promptImageKey
+    ) {
+      await deleteMcqImageObject(existing.promptImageKey);
+    }
+
+    const sortedChoices = [...choices]
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((c) => {
+        const prev = existing?.choices.find((x) => x.key === c.key);
+        const nextImage =
+          c.imageKey === undefined ? (prev?.imageKey ?? null) : c.imageKey;
+        return {
+          key: c.key,
+          labelText: c.labelText,
+          imageKey: nextImage,
+          prevImageKey: prev?.imageKey ?? null,
+        };
+      });
+
+    for (const prev of existing?.choices ?? []) {
+      if (!sortedChoices.some((c) => c.key === prev.key) && prev.imageKey) {
+        await deleteMcqImageObject(prev.imageKey);
+      }
+    }
+    for (const c of sortedChoices) {
+      if (c.prevImageKey && c.imageKey !== c.prevImageKey) {
+        await deleteMcqImageObject(c.prevImageKey);
+      }
+    }
+
+    const savedId = await prisma.$transaction(async (tx) => {
+      if (existing) {
+        await tx.pageMcqChoice.deleteMany({ where: { mcqId: existing.id } });
+        await tx.pageMcq.update({
+          where: { id: existing.id },
+          data: {
+            prompt,
+            correctKey,
+            promptImageKey: nextPromptKey,
+          },
+        });
+        await tx.pageMcqChoice.createMany({
+          data: sortedChoices.map((c) => ({
+            mcqId: existing.id,
+            key: c.key,
+            labelText: c.labelText,
+            imageKey: c.imageKey,
+          })),
+        });
+        return existing.id;
+      }
+
+      const created = await tx.pageMcq.create({
+        data: {
+          pageId,
+          prompt,
+          correctKey,
+          promptImageKey: nextPromptKey,
+          choices: {
+            create: sortedChoices.map((c) => ({
+              key: c.key,
+              labelText: c.labelText,
+              imageKey: c.imageKey,
+            })),
+          },
+        },
+      });
+      return created.id;
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "page.mcq.upsert",
+      entityType: "PageMcq",
+      entityId: savedId,
+      metadata: { pageId, storyId: page.storyId },
+    });
+
+    revalidatePath(`/dashboard/cerita/${page.storyId}`);
+    return { ok: true, data: { id: savedId } };
+  } catch (error) {
+    return { ok: false, error: toActionError(error, "Gagal menyimpan soal") };
+  }
+}
+
+export async function deletePageMcq(
+  input: { pageId: string },
+): Promise<ActionResult<{ pageId: string }>> {
+  try {
+    const parsed = deletePageMcqSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+    const { user, page } = await loadPageForEdit(parsed.data.pageId);
+    const existing = await prisma.pageMcq.findUnique({
+      where: { pageId: parsed.data.pageId },
+      include: { choices: true },
+    });
+    if (!existing) {
+      return { ok: true, data: { pageId: parsed.data.pageId } };
+    }
+
+    await deleteMcqImageObject(existing.promptImageKey);
+    for (const c of existing.choices) {
+      await deleteMcqImageObject(c.imageKey);
+    }
+
+    await prisma.pageMcq.delete({ where: { id: existing.id } });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "page.mcq.delete",
+      entityType: "PageMcq",
+      entityId: existing.id,
+      metadata: { pageId: parsed.data.pageId, storyId: page.storyId },
+    });
+
+    revalidatePath(`/dashboard/cerita/${page.storyId}`);
+    return { ok: true, data: { pageId: parsed.data.pageId } };
+  } catch (error) {
+    return { ok: false, error: toActionError(error, "Gagal menghapus soal") };
+  }
+}
+
+export async function uploadPageMcqImage(formData: FormData): Promise<
+  ActionResult<{ storageKey: string; url: string }>
+> {
+  try {
+    const pageId = String(formData.get("pageId") ?? "");
+    const slot = String(formData.get("slot") ?? "");
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
+      return { ok: false, error: "File gambar wajib" };
+    }
+    const valid = validateMcqImageFile(file);
+    if (!valid.ok) return { ok: false, error: valid.error };
+
+    const { user, page } = await loadPageForEdit(pageId);
+
+    let storageKey: string;
+    if (slot === "prompt") {
+      storageKey = pageMcqPromptKey(page.storyId, pageId, valid.ext);
+    } else if (MCQ_KEY_POOL.includes(slot as McqKey)) {
+      storageKey = pageMcqChoiceKey(page.storyId, pageId, slot, valid.ext);
+    } else {
+      return { ok: false, error: "Slot gambar tidak valid" };
+    }
+
+    const uploaded = await uploadMcqImageObject(storageKey, file);
+    if (!uploaded.ok) return { ok: false, error: uploaded.error };
+
+    const signed = await createMcqImageSignedUrl(storageKey);
+    if (!signed.ok) {
+      return { ok: false, error: signed.error };
+    }
+
+    await writeAudit({
+      actorId: user.id,
+      action: "page.mcq.upsert",
+      entityType: "PageMcqImage",
+      entityId: pageId,
+      metadata: { slot },
+    });
+
+    return { ok: true, data: { storageKey, url: signed.url } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toActionError(error, "Gagal mengunggah gambar soal"),
+    };
+  }
+}
+
+export async function upsertSessionMcqResponse(
+  input: UpsertSessionMcqResponseInput,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const parsed = upsertSessionMcqResponseSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+    const user = await requireSession();
+    const { sessionId, studentId, pageMcqId, selectedKey } = parsed.data;
+
+    const session = await prisma.learningSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        endedAt: true,
+        ledByUserId: true,
+        studentId: true,
+        storyId: true,
+      },
+    });
+    if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
+    if (session.endedAt) {
+      return { ok: false, error: "Sesi sudah berakhir" };
+    }
+    if (user.role !== "ADMIN" && session.ledByUserId !== user.id) {
+      throw new AuthzError();
+    }
+
+    await ensureSessionStudent(user, session, studentId);
+
+    const mcq = await prisma.pageMcq.findFirst({
+      where: {
+        id: pageMcqId,
+        page: { storyId: session.storyId },
+      },
+      select: {
+        id: true,
+        choices: { select: { key: true } },
+      },
+    });
+    if (!mcq) throw new AuthzError("Soal tidak ditemukan", 404);
+    if (!mcq.choices.some((c) => c.key === selectedKey)) {
+      return { ok: false, error: "Pilihan tidak valid untuk soal ini" };
+    }
+
+    const row = await prisma.sessionMcqResponse.upsert({
+      where: {
+        sessionId_pageMcqId: { sessionId, pageMcqId },
+      },
+      create: { sessionId, pageMcqId, selectedKey },
+      update: { selectedKey },
+      select: { id: true },
+    });
+
+    await writeAudit({
+      actorId: user.id,
+      action: "session.mcq.response",
+      entityType: "SessionMcqResponse",
+      entityId: row.id,
+      metadata: { sessionId, pageMcqId, selectedKey },
+    });
+
+    revalidatePath(`/belajar/${sessionId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toActionError(error, "Gagal menyimpan jawaban"),
+    };
+  }
+}
+
+/** Adult summary with correctKey — not for child UI. */
+export async function listSessionMcqSummary(
   sessionId: string,
-): Promise<SessionEvalItemView[]> {
+): Promise<SessionMcqSummaryRow[]> {
   const user = await requireSession();
   const session = await prisma.learningSession.findUnique({
     where: { id: sessionId },
@@ -486,115 +419,39 @@ export async function listSessionEvaluationItems(
     },
   });
   if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
+
   if (user.role !== "ADMIN" && session.ledByUserId !== user.id) {
     await assertCanAccessStudent(user, session.studentId);
   }
 
-  const evaluations = await prisma.storyEvaluation.findMany({
-    where: { storyId: session.storyId },
-    orderBy: { sortOrder: "asc" },
-    include: {
-      items: {
-        orderBy: { sortOrder: "asc" },
-        include: {
-          responses: {
-            where: { sessionId: session.id },
-            take: 1,
-            select: { value: true, note: true },
-          },
-        },
+  const mcqs = await prisma.pageMcq.findMany({
+    where: { page: { storyId: session.storyId } },
+    orderBy: { page: { sortOrder: "asc" } },
+    select: {
+      id: true,
+      prompt: true,
+      correctKey: true,
+      pageId: true,
+      page: { select: { sortOrder: true } },
+      choices: {
+        orderBy: { key: "asc" },
+        select: { key: true, labelText: true },
+      },
+      responses: {
+        where: { sessionId },
+        take: 1,
+        select: { selectedKey: true },
       },
     },
   });
 
-  return evaluations.flatMap((ev) =>
-    ev.items.map((item) => ({
-      id: item.id,
-      prompt: item.prompt,
-      itemType: item.itemType,
-      evaluationTitle: ev.title,
-      response: item.responses[0]
-        ? {
-            value: item.responses[0].value,
-            note: item.responses[0].note,
-          }
-        : null,
-    })),
-  );
-}
-
-export async function upsertSessionEvaluationResponse(
-  input: UpsertSessionEvaluationResponseInput,
-): Promise<ActionResult<{ id: string }>> {
-  try {
-    const parsed = upsertSessionEvaluationResponseSchema.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
-      };
-    }
-    const user = await requireSession();
-    const session = await prisma.learningSession.findUnique({
-      where: { id: parsed.data.sessionId },
-      select: {
-        id: true,
-        ledByUserId: true,
-        studentId: true,
-        storyId: true,
-        endedAt: true,
-      },
-    });
-    if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
-    if (user.role !== "ADMIN" && session.ledByUserId !== user.id) {
-      throw new AuthzError();
-    }
-    if (session.endedAt) {
-      throw new AuthzError("Sesi sudah berakhir");
-    }
-
-    const item = await prisma.evaluationItem.findUnique({
-      where: { id: parsed.data.evaluationItemId },
-      include: { evaluation: { select: { storyId: true } } },
-    });
-    if (!item || item.evaluation.storyId !== session.storyId) {
-      throw new AuthzError("Item evaluasi tidak valid", 404);
-    }
-
-    const valueJson = parsed.data.value as Prisma.InputJsonValue;
-    const row = await prisma.sessionEvaluationResponse.upsert({
-      where: {
-        sessionId_evaluationItemId: {
-          sessionId: session.id,
-          evaluationItemId: item.id,
-        },
-      },
-      create: {
-        sessionId: session.id,
-        evaluationItemId: item.id,
-        value: valueJson,
-        note: parsed.data.note ?? null,
-      },
-      update: {
-        value: valueJson,
-        note: parsed.data.note ?? null,
-      },
-    });
-
-    await writeAudit({
-      actorId: user.id,
-      action: "session.evaluation.response",
-      entityType: "SessionEvaluationResponse",
-      entityId: row.id,
-      metadata: { sessionId: session.id, evaluationItemId: item.id },
-    });
-
-    revalidatePath(`/belajar/${session.id}`);
-    return { ok: true, data: { id: row.id } };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toActionError(error, "Gagal menyimpan evaluasi"),
-    };
-  }
+  return mcqs.map((m) => ({
+    pageMcqId: m.id,
+    pageId: m.pageId,
+    pageSortOrder: m.page.sortOrder,
+    prompt: m.prompt,
+    correctKey: m.correctKey,
+    selectedKey: m.responses[0]?.selectedKey ?? null,
+    choices: m.choices,
+  }));
 }

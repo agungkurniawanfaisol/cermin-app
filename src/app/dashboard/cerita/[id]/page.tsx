@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { StoryStatus } from "@prisma/client";
 import {
@@ -11,31 +9,23 @@ import {
 
 /** Auth + Prisma — blocking route. */
 export const instant = false;
-import { countStoryEvaluations } from "@/server/actions/evaluations";
 import {
   getStoryDetail,
   getStoryEditorShell,
   listActiveCategories,
+  listStoryVersions,
 } from "@/server/actions/stories";
 import { listActiveStudentsForSession } from "@/server/actions/students";
 import {
   STORY_STATUSES,
   type StoryStatusValue,
 } from "@/server/validations/story";
-import { PagesEditor } from "./pages-editor";
-import { StatusTimeline } from "./status-timeline";
 import {
   parseAuthoringTab,
   type AuthoringStepId,
 } from "./authoring-tab";
-import {
-  StoryAuthoringWizard,
-  type AuthoringStepMeta,
-} from "./story-authoring-wizard";
-import { StoryEvaluationPanel } from "./story-evaluation-panel";
-import { StoryCoverUploader } from "./story-cover-uploader";
-import { StoryMetaForm } from "./story-meta-form";
-import { StoryPreviewPanel } from "./story-preview-panel";
+import type { AuthoringStepMeta } from "./story-authoring-wizard";
+import { StoryDetailClient } from "./story-detail-client";
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draf",
@@ -87,14 +77,8 @@ async function CeritaDetailContent({
   const canManage = user.role === "ADMIN" || user.role === "TERAPIS";
 
   let shell: Awaited<ReturnType<typeof getStoryEditorShell>>;
-  let evaluationCount = 0;
   try {
-    const [shellResult, evalCount] = await Promise.all([
-      getStoryEditorShell(id),
-      countStoryEvaluations(id),
-    ]);
-    shell = shellResult;
-    evaluationCount = evalCount;
+    shell = await getStoryEditorShell(id);
   } catch (error) {
     if (error instanceof AuthzError) {
       if (error.status === 404) notFound();
@@ -114,7 +98,6 @@ async function CeritaDetailContent({
     shell.pagesWithText === shell.pageCount &&
     shell.pagesWithMedia > 0;
   const previewDone = shell.pageCount > 0;
-  const evaluasiDone = evaluationCount > 0;
   const statusDone =
     shell.status === StoryStatus.PUBLISHED ||
     shell.status === StoryStatus.APPROVED;
@@ -129,9 +112,9 @@ async function CeritaDetailContent({
     },
     {
       id: "halaman",
-      title: "Halaman, teks, dan media",
+      title: "Halaman, teks, media, dan soal",
       short: "Halaman",
-      tip: `Susun alur cerita halaman demi halaman. Teks singkat dan tenang. Unggah gambar umum atau foto khusus murid (personalization), plus audio narasi jika perlu. Saat ini: ${shell.pageCount} halaman · ${shell.pagesWithText} berteks · ${shell.pagesWithMedia} bermedia.`,
+      tip: `Susun alur cerita halaman demi halaman. Teks singkat dan tenang. Unggah gambar/audio, lalu opsional tambah satu soal per halaman (jumlah pilihan bebas, teks/gambar). Saat ini: ${shell.pageCount} halaman · ${shell.pagesWithText} berteks · ${shell.pagesWithMedia} bermedia.`,
       done: halamanDone,
     },
     {
@@ -140,13 +123,6 @@ async function CeritaDetailContent({
       short: "Preview",
       tip: "Pratinjau tampilan seperti /belajar: foto murid, teks besar, ilustrasi umum, dan audio — tanpa menyimpan sesi.",
       done: previewDone,
-    },
-    {
-      id: "evaluasi",
-      title: "Evaluasi sesi",
-      short: "Evaluasi",
-      tip: "Buat template pertanyaan yang diisi orang dewasa saat sesi /belajar. Bukan skor kompetitif — observasi singkat agar tindak lanjut terarah. Opsional tetapi sangat membantu laporan.",
-      done: evaluasiDone,
     },
     {
       id: "status",
@@ -158,29 +134,27 @@ async function CeritaDetailContent({
   ];
 
   const active = resolveActiveTab(initialTab, steps);
-  const needsPages = active === "halaman" || active === "preview";
-  const needsCategories = active === "identitas" && canManage;
-  const needsStudents = needsPages && canManage;
 
+  // Muat payload editor sekali — ganti tab di klien tanpa RSC refetch.
   let categories: Awaited<ReturnType<typeof listActiveCategories>> = [
     { id: shell.categoryId, name: shell.category.name },
   ];
   let students: Awaited<ReturnType<typeof listActiveStudentsForSession>> = [];
   let detail: Awaited<ReturnType<typeof getStoryDetail>> | null = null;
+  let versions: Awaited<ReturnType<typeof listStoryVersions>> = [];
 
   try {
-    const [categoryResult, studentResult, detailResult] = await Promise.all([
-      needsCategories
-        ? listActiveCategories()
-        : Promise.resolve(null),
-      needsStudents
-        ? listActiveStudentsForSession()
-        : Promise.resolve(null),
-      needsPages ? getStoryDetail(id) : Promise.resolve(null),
-    ]);
+    const [categoryResult, studentResult, detailResult, versionResult] =
+      await Promise.all([
+        canManage ? listActiveCategories() : Promise.resolve(null),
+        canManage ? listActiveStudentsForSession() : Promise.resolve(null),
+        getStoryDetail(id),
+        canManage ? listStoryVersions(id) : Promise.resolve([]),
+      ]);
     if (categoryResult) categories = categoryResult;
     if (studentResult) students = studentResult;
     detail = detailResult;
+    versions = versionResult;
   } catch (error) {
     if (error instanceof AuthzError) {
       if (error.status === 404) notFound();
@@ -189,126 +163,85 @@ async function CeritaDetailContent({
     throw error;
   }
 
-  let panel: ReactNode = null;
-  if (active === "identitas") {
-    panel = (
-      <div className="flex flex-col gap-4">
-        <StoryMetaForm
-          key={`meta-${shell.updatedAt.toISOString()}`}
-          storyId={shell.id}
-          initial={{
-            categoryId: shell.categoryId,
-            title: shell.title,
-            description: shell.description,
-            learningObjectives: shell.learningObjectives,
-          }}
-          categories={categories}
-          readOnly={!editable}
-        />
-        <StoryCoverUploader
-          key={`cover-${shell.coverMediaId ?? "none"}-${shell.updatedAt.toISOString()}`}
-          storyId={shell.id}
-          coverMediaId={shell.coverMediaId}
-          readOnly={!editable}
-        />
-      </div>
-    );
-  } else if (active === "halaman" && detail) {
-    panel = (
-      <PagesEditor
-        key={shell.id}
-        storyId={shell.id}
-        students={students}
-        pages={detail.pages.map((p) => ({
-          id: p.id,
-          sortOrder: p.sortOrder,
-          title: p.title,
-          bodyText: p.bodyText,
-          media: p.media.map((m) => ({
-            id: m.id,
-            kind: m.kind,
-            mimeType: m.mimeType,
-            altText: m.altText,
-            sortOrder: m.sortOrder,
-            studentId: m.studentId,
-            student: m.student,
-          })),
-        }))}
-        readOnly={!editable}
-      />
-    );
-  } else if (active === "preview" && detail) {
-    panel = (
-      <StoryPreviewPanel
-        title={shell.title}
-        students={students.map((s) => ({
-          id: s.id,
-          displayName: s.displayName,
-        }))}
-        pages={detail.pages.map((p) => ({
-          id: p.id,
-          sortOrder: p.sortOrder,
-          bodyText: p.bodyText,
-          media: p.media.map((m) => ({
-            id: m.id,
-            kind: m.kind,
-            altText: m.altText,
-            sortOrder: m.sortOrder,
-            studentId: m.studentId,
-          })),
-        }))}
-      />
-    );
-  } else if (active === "evaluasi") {
-    panel = (
-      <StoryEvaluationPanel
-        storyId={shell.id}
-        categoryName={shell.category.name}
-        readOnly={!editable}
-      />
-    );
-  } else if (active === "status") {
-    panel = (
-      <StatusTimeline
-        storyId={shell.id}
-        currentStatus={shell.status as StoryStatusValue}
-        targets={targets}
-      />
-    );
+  if (!detail) {
+    notFound();
   }
 
-  return (
-    <main className="w-full flex-1 flex flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-      <div>
-        <Link
-          href="/dashboard/cerita"
-          className="text-sm text-[var(--cermin-accent,#3d7c6b)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2"
-        >
-          ← Kembali ke daftar cerita
-        </Link>
-        <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold text-[var(--text,#1f2933)] sm:text-3xl">
-              {shell.title}
-            </h1>
-            <p className="mt-2 text-sm text-[var(--cermin-muted,#5c6b73)]">
-              {shell.category.name} · {statusLabel} · Pembuat:{" "}
-              {shell.createdBy.name}
-            </p>
-          </div>
-        </div>
-      </div>
+  const pages = detail.pages.map((p) => ({
+    id: p.id,
+    sortOrder: p.sortOrder,
+    title: p.title,
+    bodyText: p.bodyText,
+    media: p.media.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      mimeType: m.mimeType,
+      altText: m.altText,
+      sortOrder: m.sortOrder,
+      studentId: m.studentId,
+      student: m.student,
+    })),
+    mcq: p.mcq
+      ? {
+          id: p.mcq.id,
+          prompt: p.mcq.prompt,
+          promptImageKey: p.mcq.promptImageKey,
+          correctKey: p.mcq.correctKey,
+          choices: p.mcq.choices.map((c) => ({
+            id: c.id,
+            key: c.key,
+            labelText: c.labelText,
+            imageKey: c.imageKey,
+          })),
+        }
+      : null,
+  }));
 
-      <StoryAuthoringWizard
-        storyId={shell.id}
-        steps={steps}
-        statusLabel={statusLabel}
-        editable={editable}
-        active={active}
-      >
-        {panel}
-      </StoryAuthoringWizard>
-    </main>
+  const previewPages = detail.pages.map((p) => ({
+    id: p.id,
+    sortOrder: p.sortOrder,
+    bodyText: p.bodyText,
+    media: p.media.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      altText: m.altText,
+      sortOrder: m.sortOrder,
+      studentId: m.studentId,
+    })),
+  }));
+
+  return (
+    <StoryDetailClient
+      storyId={shell.id}
+      title={shell.title}
+      categoryName={shell.category.name}
+      createdByName={shell.createdBy.name}
+      statusLabel={statusLabel}
+      status={shell.status as StoryStatusValue}
+      editable={editable}
+      steps={steps}
+      initialTab={active}
+      targets={targets}
+      meta={{
+        categoryId: shell.categoryId,
+        title: shell.title,
+        description: shell.description,
+        learningObjectives: shell.learningObjectives,
+        updatedAtIso: shell.updatedAt.toISOString(),
+        coverMediaId: shell.coverMediaId,
+      }}
+      categories={categories}
+      students={students}
+      pages={pages}
+      previewPages={previewPages}
+      versions={versions}
+      canRestoreVersion={
+        user.role === "ADMIN" ||
+        (user.role === "TERAPIS" &&
+          shell.status === StoryStatus.DRAFT &&
+          shell.createdById === user.id)
+      }
+    />
   );
 }
 

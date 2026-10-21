@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   AuthzError,
-  assertCanAccessMedia,
+  loadMediaForSignedUrl,
   requireSession,
 } from "@/server/policies/access";
 import { mediaIdSchema } from "@/server/validations/media";
@@ -30,17 +29,8 @@ export async function GET(
         { status: 400 },
       );
     }
-    const { id } = parsed.data;
 
-    await assertCanAccessMedia(user, id);
-
-    const media = await prisma.mediaAsset.findUnique({ where: { id } });
-    if (!media) {
-      return NextResponse.json(
-        { error: "Media tidak ditemukan" },
-        { status: 404 },
-      );
-    }
+    const media = await loadMediaForSignedUrl(user, parsed.data.id);
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage

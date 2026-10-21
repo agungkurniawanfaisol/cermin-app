@@ -75,7 +75,7 @@ export function CreateStoryForm({
           </h2>
           <p className="mt-1 text-sm text-[var(--cermin-muted,#5c6b73)]">
             Setelah disimpan, Anda langsung masuk ke editor langkah demi langkah
-            untuk halaman, media, evaluasi, dan status.
+            untuk halaman, media, soal pilihan, dan status.
           </p>
         </div>
         <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">

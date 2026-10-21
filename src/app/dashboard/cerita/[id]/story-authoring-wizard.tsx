@@ -1,11 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
 import {
   BookOpen,
   Check,
-  ClipboardList,
   Eye,
   FileText,
   Send,
@@ -31,29 +29,26 @@ const STEP_ICONS: Record<AuthoringStepId, typeof FileText> = {
   identitas: FileText,
   halaman: BookOpen,
   preview: Eye,
-  evaluasi: ClipboardList,
   status: Send,
 };
 
 type Props = {
+  /** Dipakai caller untuk URL sync; wizard sendiri tidak navigasi. */
   storyId: string;
   steps: AuthoringStepMeta[];
   statusLabel: string;
   editable: boolean;
   active: AuthoringStepId;
+  onTabChange: (tab: AuthoringStepId) => void;
   children: ReactNode;
 };
 
-function tabHref(storyId: string, tab: AuthoringStepId) {
-  return `/dashboard/cerita/${storyId}?tab=${tab}`;
-}
-
 export function StoryAuthoringWizard({
-  storyId,
   steps,
   statusLabel,
   editable,
   active,
+  onTabChange,
   children,
 }: Props) {
   const activeMeta = steps.find((s) => s.id === active) ?? steps[0];
@@ -79,7 +74,7 @@ export function StoryAuthoringWizard({
             </h2>
             <p className="mt-1 text-sm text-[var(--cermin-muted,#5c6b73)]">
               {editable
-                ? "Hanya langkah aktif yang dimuat — pindah langkah lebih ringan. Setiap bagian punya tombol simpan sendiri."
+                ? "Ganti langkah instan di perangkat ini. Setiap bagian punya tombol simpan sendiri."
                 : "Mode baca saja. Status cerita saat ini tidak mengizinkan mengubah konten."}
             </p>
           </div>
@@ -95,17 +90,18 @@ export function StoryAuthoringWizard({
         <ol
           className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5"
           aria-label="Daftar langkah"
+          role="tablist"
         >
           {steps.map((step, index) => {
             const Icon = STEP_ICONS[step.id];
             const isActive = step.id === active;
             return (
-              <li key={step.id}>
-                <Link
-                  href={tabHref(storyId, step.id)}
-                  prefetch
-                  scroll={false}
-                  aria-current={isActive ? "page" : undefined}
+              <li key={step.id} role="presentation">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => onTabChange(step.id)}
                   className={cx(
                     "flex w-full cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-left",
                     "min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2",
@@ -147,7 +143,7 @@ export function StoryAuthoringWizard({
                           : "Belum"}
                     </span>
                   </span>
-                </Link>
+                </button>
               </li>
             );
           })}
@@ -187,26 +183,24 @@ export function StoryAuthoringWizard({
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
             {prev ? (
-              <Link
-                href={tabHref(storyId, prev.id)}
-                prefetch
-                scroll={false}
+              <button
+                type="button"
+                onClick={() => onTabChange(prev.id)}
                 className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-[var(--border,#d9e2ec)] bg-white px-4 text-sm font-medium text-[var(--text,#1f2933)] transition-colors hover:bg-[var(--accent-soft,#e6f2ee)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2"
               >
                 ← {prev.short}
-              </Link>
+              </button>
             ) : (
               <span />
             )}
             {next ? (
-              <Link
-                href={tabHref(storyId, next.id)}
-                prefetch
-                scroll={false}
+              <button
+                type="button"
+                onClick={() => onTabChange(next.id)}
                 className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg bg-[var(--cermin-accent,#3d7c6b)] px-4 text-sm font-medium text-white transition-colors hover:bg-[var(--focus,#0b6e4f)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2"
               >
                 Lanjut: {next.short} →
-              </Link>
+              </button>
             ) : (
               <p className="text-sm text-[var(--cermin-muted,#5c6b73)] sm:text-right">
                 Langkah terakhir — pastikan status siap sebelum memandu sesi.

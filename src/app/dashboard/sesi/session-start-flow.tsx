@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { BookOpen, ChevronLeft, ChevronRight, Play } from "lucide-react";
 import {
   startLearningSession,
@@ -38,11 +38,92 @@ type CategoryCard = {
   name: string;
   description: string | null;
   storyCount: number;
-  coverUrl: string | null;
 };
 
 function isWizardStep(value: string | null): value is WizardStep {
   return value === "category" || value === "story" || value === "preview";
+}
+
+function readWizardFromLocation(pathname: string): {
+  step: WizardStep;
+  studentId: string;
+  categoryId: string;
+  storyId: string;
+} {
+  if (typeof window === "undefined") {
+    return { step: "category", studentId: "", categoryId: "", storyId: "" };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const stepParam = params.get("step");
+  return {
+    step: isWizardStep(stepParam) ? stepParam : "category",
+    studentId: params.get("studentId") ?? "",
+    categoryId: params.get("categoryId") ?? "",
+    storyId: params.get("storyId") ?? "",
+  };
+}
+
+function CategoryCoverThumb({
+  categoryId,
+  className,
+}: {
+  categoryId: string;
+  className?: string;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUrl(null);
+    setFailed(false);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/category/${categoryId}/cover`, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const body = (await res.json()) as { url?: string | null };
+        if (cancelled) return;
+        if (!res.ok || !body.url) {
+          setFailed(true);
+          return;
+        }
+        setUrl(body.url);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [categoryId]);
+
+  if (!url && !failed) {
+    return (
+      <div
+        className={`h-full w-full animate-pulse bg-[var(--accent-soft,#e6f2ee)] ${className ?? ""}`}
+        aria-hidden
+      />
+    );
+  }
+
+  if (failed || !url) {
+    return (
+      <div
+        className={`flex h-full items-center justify-center ${className ?? ""}`}
+      >
+        <span className="flex size-12 items-center justify-center rounded-xl bg-white text-[var(--cermin-accent,#3d7c6b)] shadow-sm sm:size-14">
+          <BookOpen className="size-6 sm:size-7" aria-hidden />
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- signed URL TTL pendek
+    <img src={url} alt="" className={`h-full w-full object-cover ${className ?? ""}`} />
+  );
 }
 
 function excerpt(text: string, max = 110): string {
@@ -175,29 +256,47 @@ export function SessionStartFlow({
   students,
   stories,
   initialStudentId,
+  initialStep = "category",
+  initialCategoryId = "",
+  initialStoryId = "",
   fullscreen = false,
 }: {
   students: StudentOption[];
   stories: PublishedStoryOption[];
   /** Murid opsional di URL; jika kosong, default murid pertama saat Memulai. */
   initialStudentId?: string;
+  initialStep?: WizardStep;
+  initialCategoryId?: string;
+  initialStoryId?: string;
   fullscreen?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [starting, setStarting] = useState(false);
   const [storyPage, setStoryPage] = useState(0);
   const storyCols = useStoryGridCols();
 
-  const stepParam = searchParams.get("step");
-  const step: WizardStep = isWizardStep(stepParam) ? stepParam : "category";
+  const [wizard, setWizard] = useState({
+    step: initialStep,
+    studentId: initialStudentId ?? "",
+    categoryId: initialCategoryId,
+    storyId: initialStoryId,
+  });
 
-  const studentIdParam = searchParams.get("studentId") ?? "";
-  const categoryIdParam = searchParams.get("categoryId") ?? "";
-  const storyIdParam = searchParams.get("storyId") ?? "";
+  const step = wizard.step;
+  const categoryIdParam = wizard.categoryId;
+  const storyIdParam = wizard.storyId;
+  const studentIdParam = wizard.studentId;
+
+  useEffect(() => {
+    function onPopState() {
+      setWizard(readWizardFromLocation(pathname));
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [pathname]);
 
   useEffect(() => {
     setStoryPage(0);
@@ -222,7 +321,6 @@ export function SessionStartFlow({
         name: s.categoryName,
         description: s.categoryDescription,
         storyCount: 1,
-        coverUrl: s.categoryCoverUrl,
       });
     }
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
@@ -254,19 +352,35 @@ export function SessionStartFlow({
         ? "grid-cols-2 md:grid-cols-3"
         : "grid-cols-2";
 
-  function replaceQuery(patch: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    for (const [key, value] of Object.entries(patch)) {
-      if (value == null || value === "") params.delete(key);
-      else params.set(key, value);
-    }
-    // Jangan paksa studentId di kategori/cerita — baru di preview bila dipilih.
-    if (!params.get("step")) {
-      params.set("step", "category");
-    }
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }
+  const replaceQuery = useCallback(
+    (patch: Record<string, string | null>) => {
+      setWizard((prev) => {
+        const next = {
+          step: prev.step,
+          studentId: prev.studentId,
+          categoryId: prev.categoryId,
+          storyId: prev.storyId,
+        };
+        if ("step" in patch) {
+          const raw = patch.step;
+          next.step = isWizardStep(raw) ? raw : "category";
+        }
+        if ("studentId" in patch) next.studentId = patch.studentId ?? "";
+        if ("categoryId" in patch) next.categoryId = patch.categoryId ?? "";
+        if ("storyId" in patch) next.storyId = patch.storyId ?? "";
+
+        const params = new URLSearchParams();
+        params.set("step", next.step);
+        if (next.studentId) params.set("studentId", next.studentId);
+        if (next.categoryId) params.set("categoryId", next.categoryId);
+        if (next.storyId) params.set("storyId", next.storyId);
+        // Tanpa router.replace — hindari RSC refetch katalog tiap ganti step.
+        window.history.pushState(null, "", `${pathname}?${params.toString()}`);
+        return next;
+      });
+    },
+    [pathname],
+  );
 
   function onCancel() {
     router.push("/dashboard/sesi");
@@ -370,20 +484,7 @@ export function SessionStartFlow({
                     className="group flex min-h-[14rem] w-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-[var(--cermin-border,#d9e2ec)] bg-white text-left shadow-[0_10px_28px_-18px_color-mix(in_srgb,var(--cermin-accent,#3d7c6b)_35%,transparent)] transition-[border-color,box-shadow,transform] duration-200 hover:border-[var(--cermin-accent,#3d7c6b)] hover:shadow-[0_14px_32px_-16px_color-mix(in_srgb,var(--cermin-accent,#3d7c6b)_40%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2 active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-[17rem] md:min-h-[19rem]"
                   >
                     <div className="relative h-28 w-full shrink-0 overflow-hidden border-b border-[var(--cermin-border,#d9e2ec)]/70 bg-[var(--accent-soft,#e6f2ee)]/60 sm:h-36 md:h-44">
-                      {cat.coverUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- signed URL TTL pendek
-                        <img
-                          src={cat.coverUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <span className="flex size-12 items-center justify-center rounded-xl bg-white text-[var(--cermin-accent,#3d7c6b)] shadow-sm sm:size-14">
-                            <BookOpen className="size-6 sm:size-7" aria-hidden />
-                          </span>
-                        </div>
-                      )}
+                      <CategoryCoverThumb categoryId={cat.id} />
                     </div>
                     <div className="flex flex-1 flex-col gap-2 px-4 py-4 sm:gap-3 sm:px-7 sm:py-5">
                       <div className="flex items-start gap-2">

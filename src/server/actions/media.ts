@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
+import { checkRateLimit, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   assertCanAccessStudent,
@@ -60,6 +61,14 @@ export async function uploadMedia(
 > {
   try {
     const user = await requireRole("ADMIN", "TERAPIS");
+    const uploadLimit = checkRateLimit(
+      `media:upload:${user.id}`,
+      40,
+      60 * 60 * 1000,
+    );
+    if (!uploadLimit.ok) {
+      return { ok: false, error: RATE_LIMIT_MESSAGE };
+    }
 
     const fileEntry = formData.get("file");
     if (!(fileEntry instanceof File) || fileEntry.size === 0) {

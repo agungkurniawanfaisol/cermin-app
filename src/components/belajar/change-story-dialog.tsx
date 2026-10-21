@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen } from "lucide-react";
 import {
+  listPublishedStoriesForSession,
   startLearningSession,
   type PublishedStoryOption,
 } from "@/server/actions/sessions";
@@ -23,20 +24,27 @@ import { Label } from "@/components/ui/label";
 type ChangeStoryDialogProps = {
   studentId: string;
   currentStoryId: string;
-  stories: PublishedStoryOption[];
+  /** Opsional — jika kosong, katalog di-fetch saat dialog dibuka. */
+  stories?: PublishedStoryOption[];
   disabled?: boolean;
 };
 
 export function ChangeStoryDialog({
   studentId,
   currentStoryId,
-  stories,
+  stories: initialStories = [],
   disabled = false,
 }: ChangeStoryDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [stories, setStories] = useState<PublishedStoryOption[]>(initialStories);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+
+  useEffect(() => {
+    setStories(initialStories);
+  }, [initialStories]);
 
   const categories = useMemo(() => {
     const map = new Map<string, string>();
@@ -59,9 +67,26 @@ export function ChangeStoryDialog({
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
     if (nextOpen) {
+      setError(null);
       setSelectedCategoryId(defaultCategoryId);
       setSelectedStoryId(currentStoryId);
-      setError(null);
+      if (stories.length === 0) {
+        setLoadingCatalog(true);
+        void listPublishedStoriesForSession()
+          .then((rows) => {
+            setStories(rows);
+            const cur = rows.find((s) => s.id === currentStoryId);
+            const catId = cur?.categoryId ?? rows[0]?.categoryId ?? "";
+            setSelectedCategoryId(catId);
+            const inCat = rows.filter((s) => s.categoryId === catId);
+            const match = inCat.find((s) => s.id === currentStoryId);
+            setSelectedStoryId(match?.id ?? inCat[0]?.id ?? currentStoryId);
+          })
+          .catch(() => {
+            setError("Gagal memuat daftar cerita");
+          })
+          .finally(() => setLoadingCatalog(false));
+      }
     }
   }
 
@@ -72,7 +97,6 @@ export function ChangeStoryDialog({
   function handleCategoryChange(newCatId: string) {
     setSelectedCategoryId(newCatId);
     const storiesInCat = stories.filter((s) => s.categoryId === newCatId);
-    // Jika cerita aktif ada di kategori ini, pertahankan; selain itu pilih yang pertama
     const matchingStory = storiesInCat.find((s) => s.id === currentStoryId);
     setSelectedStoryId(matchingStory?.id ?? storiesInCat[0]?.id ?? "");
   }
@@ -132,52 +156,60 @@ export function ChangeStoryDialog({
           </DialogHeader>
 
           <div className="space-y-4 px-4 py-4 sm:px-5">
-            <div className="space-y-2">
-              <Label
-                htmlFor="ganti-kategori"
-                className="text-sm font-semibold text-[var(--text,#1f2933)]"
-              >
-                Kategori cerita
-              </Label>
-              <select
-                id="ganti-kategori"
-                required
-                value={selectedCategoryId}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-                disabled={pending || categories.length === 0}
-                className="flex h-11 w-full rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-3 text-base text-[var(--text,#1f2933)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)]"
-              >
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {loadingCatalog ? (
+              <p className="text-sm text-[var(--cermin-muted,#5c6b73)]" role="status">
+                Memuat daftar cerita…
+              </p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="ganti-kategori"
+                    className="text-sm font-semibold text-[var(--text,#1f2933)]"
+                  >
+                    Kategori cerita
+                  </Label>
+                  <select
+                    id="ganti-kategori"
+                    required
+                    value={selectedCategoryId}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
+                    disabled={pending || categories.length === 0}
+                    className="flex h-11 w-full rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-3 text-base text-[var(--text,#1f2933)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)]"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="space-y-2">
-              <Label
-                htmlFor="ganti-cerita"
-                className="text-sm font-semibold text-[var(--text,#1f2933)]"
-              >
-                Judul cerita
-              </Label>
-              <select
-                id="ganti-cerita"
-                required
-                value={selectedStoryId}
-                onChange={(e) => setSelectedStoryId(e.target.value)}
-                disabled={pending || filteredStories.length === 0}
-                className="flex h-11 w-full rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-3 text-base text-[var(--text,#1f2933)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)]"
-              >
-                {filteredStories.map((story) => (
-                  <option key={story.id} value={story.id}>
-                    {story.title}
-                    {story.id === currentStoryId ? " (Sedang aktif)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="ganti-cerita"
+                    className="text-sm font-semibold text-[var(--text,#1f2933)]"
+                  >
+                    Judul cerita
+                  </Label>
+                  <select
+                    id="ganti-cerita"
+                    required
+                    value={selectedStoryId}
+                    onChange={(e) => setSelectedStoryId(e.target.value)}
+                    disabled={pending || filteredStories.length === 0}
+                    className="flex h-11 w-full rounded-lg border border-[var(--cermin-border,#d9e2ec)] bg-white px-3 text-base text-[var(--text,#1f2933)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)]"
+                  >
+                    {filteredStories.map((story) => (
+                      <option key={story.id} value={story.id}>
+                        {story.title}
+                        {story.id === currentStoryId ? " (Sedang aktif)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
             {error ? (
               <p
@@ -206,6 +238,7 @@ export function ChangeStoryDialog({
               type="submit"
               disabled={
                 pending ||
+                loadingCatalog ||
                 !selectedStoryId ||
                 selectedStoryId === currentStoryId
               }
