@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ListedUser } from "@/server/actions/invites";
-import { DisableUserButton } from "@/components/dashboard/disable-user-button";
+import { DeleteUserDialog } from "@/components/dashboard/delete-user-dialog";
+import { formatDateTimeId } from "@/lib/format-date";
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Admin",
@@ -39,7 +40,7 @@ export function UserList({ users, currentUserId }: Props) {
     <>
       <ul className="grid gap-3 lg:hidden" aria-label="Daftar pengguna">
         {users.map((user) => {
-          const canDisable =
+          const canDelete =
             user.status === "ACTIVE" && user.id !== currentUserId;
           return (
             <li key={user.id}>
@@ -58,7 +59,7 @@ export function UserList({ users, currentUserId }: Props) {
                   </span>
                 </div>
 
-                <dl className="mt-3 text-sm">
+                <dl className="mt-3 space-y-2 text-sm">
                   <div>
                     <dt className="text-xs text-[var(--cermin-muted,#5c6b73)]">
                       Peran
@@ -67,11 +68,32 @@ export function UserList({ users, currentUserId }: Props) {
                       {ROLE_LABEL[user.role] ?? user.role}
                     </dd>
                   </div>
+                  {user.status === "DISABLED" && user.disabledReason ? (
+                    <div>
+                      <dt className="text-xs text-[var(--cermin-muted,#5c6b73)]">
+                        Alasan hapus
+                      </dt>
+                      <dd className="text-[var(--text,#1f2933)]">
+                        {user.disabledReason}
+                        {user.disabledBy ? (
+                          <span className="mt-0.5 block text-xs text-[var(--cermin-muted,#5c6b73)]">
+                            oleh {user.disabledBy.name}
+                            {user.disabledAt
+                              ? ` · ${formatDateTimeId(user.disabledAt)}`
+                              : ""}
+                          </span>
+                        ) : null}
+                      </dd>
+                    </div>
+                  ) : null}
                 </dl>
 
-                {canDisable ? (
+                {canDelete ? (
                   <div className="mt-4 border-t border-[var(--cermin-border,#d9e2ec)] pt-3">
-                    <DisableUserButton userId={user.id} />
+                    <DeleteUserDialog
+                      userId={user.id}
+                      displayName={user.name}
+                    />
                   </div>
                 ) : null}
               </article>
@@ -81,7 +103,7 @@ export function UserList({ users, currentUserId }: Props) {
       </ul>
 
       <div className="hidden overflow-x-auto rounded-xl border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] lg:block">
-        <table className="w-full min-w-[36rem] text-left text-sm">
+        <table className="w-full min-w-[40rem] text-left text-sm">
           <thead className="border-b border-[var(--cermin-border,#d9e2ec)] bg-[var(--bg,#f7f4ef)]">
             <tr>
               <th className="px-4 py-3 font-medium">Nama</th>
@@ -97,8 +119,19 @@ export function UserList({ users, currentUserId }: Props) {
                 key={user.id}
                 className="cermin-hover-row border-b border-[var(--cermin-border,#d9e2ec)] last:border-0"
               >
-                <td className="px-4 py-3 text-[var(--text,#1f2933)]">
+                <td className="px-4 py-3 align-top text-[var(--text,#1f2933)]">
                   {user.name}
+                  {user.status === "DISABLED" && user.disabledReason ? (
+                    <p
+                      className="mt-1 max-w-[14rem] text-xs text-[var(--cermin-muted,#5c6b73)]"
+                      title={user.disabledReason}
+                    >
+                      {user.disabledReason}
+                      {user.disabledBy
+                        ? ` · ${user.disabledBy.name}`
+                        : ""}
+                    </p>
+                  ) : null}
                 </td>
                 <td className="px-4 py-3 text-[var(--cermin-muted,#5c6b73)]">
                   {user.email}
@@ -111,7 +144,10 @@ export function UserList({ users, currentUserId }: Props) {
                 </td>
                 <td className="px-4 py-3">
                   {user.status === "ACTIVE" && user.id !== currentUserId ? (
-                    <DisableUserButton userId={user.id} />
+                    <DeleteUserDialog
+                      userId={user.id}
+                      displayName={user.name}
+                    />
                   ) : (
                     <span className="text-[var(--cermin-muted,#5c6b73)]">
                       —

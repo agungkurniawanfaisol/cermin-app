@@ -72,6 +72,16 @@ export const transitionStoryStatusSchema = z.object({
   }),
 });
 
+/** Hapus lunak (arsip) — alasan wajib untuk jejak audit. */
+export const archiveStorySchema = z.object({
+  storyId: z.string().uuid("ID cerita tidak valid"),
+  reason: z
+    .string()
+    .trim()
+    .min(10, "Alasan minimal 10 karakter")
+    .max(500, "Alasan maksimal 500 karakter"),
+});
+
 export const restoreStoryVersionSchema = z.object({
   storyId: z.string().uuid("ID cerita tidak valid"),
   versionId: z.string().uuid("ID versi tidak valid"),
@@ -126,6 +136,7 @@ export type ReorderPagesInput = z.infer<typeof reorderPagesSchema>;
 export type TransitionStoryStatusInput = z.infer<
   typeof transitionStoryStatusSchema
 >;
+export type ArchiveStoryInput = z.infer<typeof archiveStorySchema>;
 export type RestoreStoryVersionInput = z.infer<
   typeof restoreStoryVersionSchema
 >;

@@ -28,6 +28,7 @@ async function CeritaContent({
 }) {
   const user = await requireSession();
   const canManage = user.role === "ADMIN" || user.role === "TERAPIS";
+  const canArchive = user.role === "ADMIN";
   const raw = toInput(await searchParams);
 
   const [result, categoryOptions] = await Promise.all([
@@ -131,6 +132,7 @@ async function CeritaContent({
             return { ...story, continueLabel, continuePrimary };
           })}
           canManage={canManage}
+          canArchive={canArchive}
         />
         <ListPagination
           page={result.page}

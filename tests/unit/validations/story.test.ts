@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  archiveStorySchema,
   createPageSchema,
   createStorySchema,
   reorderPagesSchema,
@@ -81,5 +82,29 @@ describe("transitionStoryStatusSchema", () => {
       toStatus: "PUBLISHED",
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("archiveStorySchema", () => {
+  it("requires reason min 10 chars", () => {
+    const short = archiveStorySchema.safeParse({
+      storyId: uuid,
+      reason: "pendek",
+    });
+    expect(short.success).toBe(false);
+
+    const ok = archiveStorySchema.safeParse({
+      storyId: uuid,
+      reason: "Konten diganti cerita baru yang lebih sesuai",
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it("rejects reason over 500 chars", () => {
+    const result = archiveStorySchema.safeParse({
+      storyId: uuid,
+      reason: "x".repeat(501),
+    });
+    expect(result.success).toBe(false);
   });
 });

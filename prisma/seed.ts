@@ -1274,18 +1274,48 @@ async function main() {
     sessionCount++;
   }
 
-  // FAQ contoh untuk halaman Bantuan (idempotent)
+  // FAQ terbit — tampil di landing + Bantuan (idempotent by question)
   const faqSeeds = [
     {
-      question: "Bagaimana cara mulai sesi belajar?",
+      question: "Apa itu CERMIN?",
       answer:
-        "Buka menu Sesi, pilih murid dan cerita yang sudah terbit, lalu mulai. Mode anak terbuka di /belajar.",
+        "CERMIN (CERita MIRip Aku) adalah platform lembaga untuk social story yang tenang. Terapis dan orang tua mendampingi anak autistik lewat cerita privat, sesi dipandu, dan observasi — tanpa akun login untuk anak.",
       sortOrder: 0,
     },
     {
-      question: "Siapa yang bisa mengarsipkan murid?",
-      answer: "Hanya Admin, dengan alasan arsip.",
+      question: "Apakah anak perlu punya akun sendiri?",
+      answer:
+        "Tidak. Anak tidak punya akun. Orang dewasa yang berwenang (admin, terapis, atau orang tua) membuka mode belajar /belajar dan memandu bersama anak.",
       sortOrder: 1,
+    },
+    {
+      question: "Bagaimana cara masuk ke dasbor?",
+      answer:
+        "Akun dibuat lewat undangan lembaga, bukan daftar mandiri. Setelah menerima undangan dan membuat kata sandi, masuk lewat halaman Masuk.",
+      sortOrder: 2,
+    },
+    {
+      question: "Bagaimana cara mulai sesi belajar?",
+      answer:
+        "Buka menu Sesi di dasbor, pilih murid dan cerita yang sudah terbit, lalu mulai. Mode anak terbuka di /belajar dengan teks besar dan kontrol tenang.",
+      sortOrder: 3,
+    },
+    {
+      question: "Apakah media cerita aman?",
+      answer:
+        "Ya. Gambar dan audio disimpan di bucket privat. Akses hanya setelah otorisasi, lewat URL bertanda tangan berumur pendek — bukan tautan publik permanen.",
+      sortOrder: 4,
+    },
+    {
+      question: "Siapa yang bisa melihat data murid?",
+      answer:
+        "Admin lembaga, terapis yang ditugaskan ke murid tersebut, dan orang tua yang tertaut. Aturan akses ditegakkan di server, bukan hanya di tampilan.",
+      sortOrder: 5,
+    },
+    {
+      question: "Siapa yang bisa mengarsipkan murid?",
+      answer: "Hanya Admin, dengan alasan arsip yang tercatat.",
+      sortOrder: 6,
     },
   ];
 
@@ -1299,6 +1329,19 @@ async function main() {
           ...f,
           isPublished: true,
           createdById: admin.id,
+        },
+      });
+    } else if (
+      existing.sortOrder !== f.sortOrder ||
+      existing.answer !== f.answer ||
+      !existing.isPublished
+    ) {
+      await prisma.faqItem.update({
+        where: { id: existing.id },
+        data: {
+          answer: f.answer,
+          sortOrder: f.sortOrder,
+          isPublished: true,
         },
       });
     }

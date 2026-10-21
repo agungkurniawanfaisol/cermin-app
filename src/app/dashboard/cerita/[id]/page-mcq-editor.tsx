@@ -249,7 +249,7 @@ export function PageMcqEditor({
   if (!enabled) {
     return (
       <div className="rounded-xl border border-dashed border-[var(--border,#d9e2ec)] bg-[var(--accent-soft,#e6f2ee)]/40 px-4 py-6 text-center">
-        <p className="text-sm text-[var(--muted,#5c6b73)]">
+        <p className="text-sm text-[var(--cermin-muted,#5c6b73)]">
           Belum ada soal. Opsional: tambah pilihan (teks dan/atau gambar), jumlah
           bebas {MCQ_MIN_CHOICES}–{MCQ_MAX_CHOICES}.
         </p>
@@ -293,7 +293,9 @@ export function PageMcqEditor({
             className="max-h-40 rounded-lg border border-[var(--border,#d9e2ec)] object-contain"
           />
         ) : d.promptImageKey ? (
-          <p className="text-xs text-[var(--muted,#5c6b73)]">Gambar tersimpan</p>
+          <p className="text-xs text-[var(--cermin-muted,#5c6b73)]">
+            Gambar tersimpan
+          </p>
         ) : null}
         {!readOnly ? (
           <Input
@@ -322,7 +324,7 @@ export function PageMcqEditor({
               <span className="inline-flex size-9 items-center justify-center rounded-lg bg-[var(--accent-soft,#e6f2ee)] text-sm font-semibold text-[var(--accent,#3d7c6b)]">
                 {choice.key}
               </span>
-              <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[var(--text,#1f2933)]">
                 <input
                   type="radio"
                   name={`mcq-correct-${pageId}`}
@@ -369,7 +371,7 @@ export function PageMcqEditor({
                 className="mb-2 max-h-28 rounded-lg border border-[var(--border,#d9e2ec)] object-contain"
               />
             ) : choice.imageKey ? (
-              <p className="mb-2 text-xs text-[var(--muted,#5c6b73)]">
+              <p className="mb-2 text-xs text-[var(--cermin-muted,#5c6b73)]">
                 Gambar tersimpan
               </p>
             ) : null}

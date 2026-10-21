@@ -183,52 +183,67 @@ export function PageAudioButton({ audio }: { audio: MediaRef }) {
     setPlaying(false);
   }
 
+  const label = playing
+    ? "Jeda suara"
+    : loading
+      ? "Memuat suara…"
+      : "Putar suara";
+
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-3">
-      <div
+    <div className="mx-auto flex w-full max-w-xs flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          if (playing) onPauseClick();
+          else void onPlayClick();
+        }}
+        disabled={loading}
+        aria-pressed={playing}
+        aria-label={label}
         className={
           playing
-            ? "flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent-soft,#e6f2ee)] px-4 py-3"
-            : "flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-[var(--belajar-line,#c5d4cc)] bg-white px-4 py-3"
+            ? "group flex min-h-[5.5rem] w-full flex-col items-center justify-center gap-2 rounded-3xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent-soft,#e6f2ee)] px-5 py-4 text-[var(--belajar-accent,#3d7c6b)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--belajar-accent-soft,#e6f2ee)_85%,white)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
+            : "group flex min-h-[5.5rem] w-full flex-col items-center justify-center gap-2 rounded-3xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent,#3d7c6b)] px-5 py-4 text-white shadow-sm transition-colors hover:bg-[#34695b] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
         }
       >
         <SoundWaveGraphic playing={playing} />
-        <p
-          className="text-center text-base font-medium text-[var(--belajar-quiet,#5c6b73)]"
+        <span
+          className={
+            playing
+              ? "text-base font-semibold text-[var(--belajar-ink,#1f2933)]"
+              : "text-base font-semibold text-white"
+          }
           role="status"
           aria-live="polite"
         >
-          {playing
-            ? "Sedang diputar"
-            : loading
-              ? "Memuat suara…"
-              : "Suara cerita"}
-        </p>
-      </div>
-
-      {playing ? (
-        <button
-          type="button"
-          onClick={onPauseClick}
-          className="inline-flex min-h-14 w-full min-w-[12rem] items-center justify-center rounded-2xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-white px-6 py-3 text-xl font-semibold text-[var(--belajar-ink,#1f2933)] shadow-sm hover:bg-[var(--belajar-accent-soft,#e6f2ee)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)]"
-        >
-          Jeda suara
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => void onPlayClick()}
-          disabled={loading}
-          className="inline-flex min-h-14 w-full min-w-[12rem] items-center justify-center rounded-2xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent,#3d7c6b)] px-6 py-3 text-xl font-semibold text-white shadow-sm hover:bg-[#34695b] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
-        >
-          {loading ? "Memuat…" : "Putar suara"}
-        </button>
-      )}
+          {label}
+        </span>
+      </button>
       {error ? (
-        <p className="text-base text-[#9b1c1c]" role="alert">
+        <p className="text-center text-base text-[#9b1c1c]" role="alert">
           {error}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/** Dock audio di bawah tengah halaman (preview + sesi). */
+export function PageAudioDock({
+  audios,
+}: {
+  audios: MediaRef[];
+}) {
+  if (audios.length === 0) return null;
+  return (
+    <div
+      className="mx-auto flex w-full max-w-md flex-col items-center gap-3 px-2 pt-2 pb-1"
+      role="group"
+      aria-label="Suara cerita"
+    >
+      {audios.map((audio) => (
+        <PageAudioButton key={audio.id} audio={audio} />
+      ))}
     </div>
   );
 }

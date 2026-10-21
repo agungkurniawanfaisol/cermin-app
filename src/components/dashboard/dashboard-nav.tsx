@@ -9,6 +9,7 @@ import {
   CircleHelp,
   ClipboardList,
   LayoutDashboard,
+  ScrollText,
   Settings,
   UserCog,
   Users,
@@ -27,6 +28,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard/cerita": BookOpen,
   "/dashboard/sesi": ClipboardList,
   "/dashboard/pengguna": UserCog,
+  "/dashboard/audit": ScrollText,
   "/dashboard/bantuan": CircleHelp,
   "/dashboard/pengaturan": Settings,
 };

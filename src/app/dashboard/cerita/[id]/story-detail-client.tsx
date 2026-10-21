@@ -69,6 +69,7 @@ export type StoryDetailClientProps = {
   previewPages: PreviewPage[];
   versions: ListedStoryVersion[];
   canRestoreVersion: boolean;
+  archivedReason?: string | null;
 };
 
 function tabUrl(storyId: string, tab: AuthoringStepId) {
@@ -93,6 +94,7 @@ export function StoryDetailClient({
   previewPages,
   versions,
   canRestoreVersion,
+  archivedReason = null,
 }: StoryDetailClientProps) {
   const [active, setActive] = useState<AuthoringStepId>(initialTab);
   const [visited, setVisited] = useState<Set<AuthoringStepId>>(
@@ -228,8 +230,10 @@ export function StoryDetailClient({
           >
             <StatusTimeline
               storyId={storyId}
+              title={title}
               currentStatus={status}
               targets={targets}
+              archivedReason={archivedReason}
             />
             <StoryVersionsPanel
               storyId={storyId}

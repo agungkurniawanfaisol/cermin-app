@@ -50,6 +50,8 @@ vi.mock("@/server/policies/access", async (importOriginal) => {
   };
 });
 
+const REASON = "Tidak lagi bertugas di lembaga ini";
+
 describe("invite + disableUser authz/audit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -119,17 +121,70 @@ describe("invite + disableUser authz/audit", () => {
       status: "ACTIVE",
     });
     const { disableUser } = await import("@/server/actions/invites");
-    const result = await disableUser("bukan-uuid");
+    const result = await disableUser({
+      userId: "bukan-uuid",
+      reason: REASON,
+    });
 
     expect(result.ok).toBe(false);
     expect(userUpdate).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
   });
 
-  it("disableUser success → user.disable audit once", async () => {
-    const targetId = "33333333-3333-4333-8333-333333333333";
+  it("disableUser short reason → no update, no audit", async () => {
     requireRole.mockResolvedValue({
       id: "admin-1",
+      email: "admin@cermin.local",
+      name: "Admin",
+      role: "ADMIN",
+      status: "ACTIVE",
+    });
+    const { disableUser } = await import("@/server/actions/invites");
+    const result = await disableUser({
+      userId: "33333333-3333-4333-8333-333333333333",
+      reason: "pendek",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(userUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("disableUser self → deny, no update, no audit", async () => {
+    const adminId = "11111111-1111-4111-8111-111111111111";
+    requireRole.mockResolvedValue({
+      id: adminId,
+      email: "admin@cermin.local",
+      name: "Admin",
+      role: "ADMIN",
+      status: "ACTIVE",
+    });
+    const { disableUser } = await import("@/server/actions/invites");
+    const result = await disableUser({ userId: adminId, reason: REASON });
+
+    expect(result.ok).toBe(false);
+    expect(userUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("disableUser as non-admin → deny, no update, no audit", async () => {
+    requireRole.mockRejectedValue(new AuthzError());
+    const { disableUser } = await import("@/server/actions/invites");
+    const result = await disableUser({
+      userId: "33333333-3333-4333-8333-333333333333",
+      reason: REASON,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(userUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  it("disableUser success → reason + byId + user.disable audit once", async () => {
+    const adminId = "11111111-1111-4111-8111-111111111111";
+    const targetId = "33333333-3333-4333-8333-333333333333";
+    requireRole.mockResolvedValue({
+      id: adminId,
       email: "admin@cermin.local",
       name: "Admin",
       role: "ADMIN",
@@ -144,12 +199,17 @@ describe("invite + disableUser authz/audit", () => {
     userUpdate.mockResolvedValue({});
 
     const { disableUser } = await import("@/server/actions/invites");
-    const result = await disableUser(targetId);
+    const result = await disableUser({ userId: targetId, reason: REASON });
 
     expect(result.ok).toBe(true);
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: targetId },
-      data: { status: UserStatus.DISABLED },
+      data: expect.objectContaining({
+        status: UserStatus.DISABLED,
+        disabledReason: REASON,
+        disabledById: adminId,
+        disabledAt: expect.any(Date),
+      }),
     });
     expect(writeAudit).toHaveBeenCalledTimes(1);
     expect(writeAudit).toHaveBeenCalledWith(
@@ -157,6 +217,11 @@ describe("invite + disableUser authz/audit", () => {
         action: "user.disable",
         entityType: "User",
         entityId: targetId,
+        metadata: expect.objectContaining({
+          email: "target@cermin.local",
+          role: "TERAPIS",
+          reason: REASON,
+        }),
       }),
     );
   });

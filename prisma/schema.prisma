@@ -50,9 +50,15 @@ model User {
   image         String?
   role          UserRole   @default(ORANG_TUA)
   status        UserStatus @default(ACTIVE)
+  /// Alasan nonaktif/hapus lunak — wajib saat status → DISABLED (Admin).
+  disabledReason String?
+  disabledAt     DateTime?
+  disabledById   String?   @db.Uuid
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
+  disabledBy           User?                 @relation("UserDisabler", fields: [disabledById], references: [id], onDelete: SetNull)
+  usersDisabled        User[]                @relation("UserDisabler")
   sessions             Session[]
   accounts             Account[]
   preference           UserPreference?
@@ -62,6 +68,7 @@ model User {
   invitesCreated       InviteToken[]
   auditLogs            AuditLog[]
   storiesCreated       Story[]               @relation("StoryCreator")
+  storiesArchived      Story[]               @relation("StoryArchiver")
   storyVersionsCreated StoryVersion[]        @relation("StoryVersionCreator")
   mediaCreated         MediaAsset[]
   sessionsLed          LearningSession[]
@@ -262,10 +269,15 @@ model Story {
   status             StoryStatus @default(DRAFT)
   createdById        String      @db.Uuid
   publishedAt        DateTime?
+  /// Alasan arsip/hapus lunak — wajib saat status → ARCHIVED (Admin).
+  archivedReason     String?
+  archivedAt         DateTime?
+  archivedById       String?     @db.Uuid
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
   category           StoryCategory @relation(fields: [categoryId], references: [id])
   createdBy          User          @relation("StoryCreator", fields: [createdById], references: [id])
+  archivedBy         User?         @relation("StoryArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
   pages              StoryPage[]
   versions           StoryVersion[]
   media              MediaAsset[]

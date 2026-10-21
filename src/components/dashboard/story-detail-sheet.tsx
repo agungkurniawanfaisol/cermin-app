@@ -149,9 +149,9 @@ export function StoryDetailSheet({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="fixed inset-0 z-50 flex h-dvh max-h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-[var(--surface,#ffffff)] p-0 shadow-none ring-0 sm:inset-3 sm:h-auto sm:max-h-[calc(100dvh-1.5rem)] sm:rounded-xl sm:border sm:border-[var(--cermin-border,#d9e2ec)] sm:shadow-lg data-open:zoom-in-100 data-closed:zoom-out-100"
+        className="fixed inset-0 top-0 left-0 z-50 flex h-dvh max-h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-[var(--surface,#ffffff)] p-0 shadow-none ring-0 sm:max-w-none data-open:zoom-in-100 data-closed:zoom-out-100"
       >
-        <DialogHeader className="shrink-0 gap-1 border-b border-[var(--cermin-border,#d9e2ec)] px-4 py-4 pr-14 sm:px-6 sm:py-5">
+        <DialogHeader className="relative shrink-0 gap-1 border-b border-[var(--cermin-border,#d9e2ec)] px-4 py-4 pr-16 sm:px-6 sm:py-5">
           <DialogTitle className="text-left text-xl text-[var(--text,#1f2933)] sm:text-2xl">
             {title}
           </DialogTitle>
@@ -161,15 +161,23 @@ export function StoryDetailSheet({
               : "Ringkasan dan pratinjau cerita"}
           </DialogDescription>
           <DialogClose
-            className="absolute top-3 right-3 inline-flex size-11 cursor-pointer items-center justify-center rounded-lg text-[var(--text,#1f2933)] hover:bg-[var(--accent-soft,#e6f2ee)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)]"
-            aria-label="Tutup detail"
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="absolute top-3 right-3 size-11 min-h-11 min-w-11 border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] text-[var(--text,#1f2933)] hover:bg-[var(--accent-soft,#e6f2ee)]"
+                aria-label="Tutup detail"
+              />
+            }
           >
-            <XIcon className="size-4" />
+            <XIcon className="size-5" aria-hidden />
+            <span className="sr-only">Tutup</span>
           </DialogClose>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-          <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6">
+          <div className="mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start lg:gap-10">
             <div className="flex flex-col gap-4">
               {preview?.coverMediaId ? (
                 <CoverImage mediaId={preview.coverMediaId} />
@@ -323,8 +331,8 @@ export function StoryDetailSheet({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-[var(--cermin-border,#d9e2ec)] bg-[var(--bg,#f7f4ef)]/90 p-4 sm:px-6">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 sm:flex-row sm:justify-end">
+        <div className="shrink-0 border-t border-[var(--cermin-border,#d9e2ec)] bg-[var(--bg,#f7f4ef)]/90 p-4 sm:px-8">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"

@@ -21,7 +21,7 @@ import { ChangeStoryDialog } from "./change-story-dialog";
 import { EvaluationPanel } from "./evaluation-panel";
 import { ObservationPanel } from "./observation-panel";
 import { PageMcqBlock } from "./page-mcq";
-import { PageAudioButton, PageImage } from "./page-media";
+import { PageAudioDock, PageImage } from "./page-media";
 
 /** Ambang geser horizontal (px) — seperti membuka halaman buku. */
 const SWIPE_THRESHOLD_PX = 56;
@@ -64,13 +64,11 @@ function StoryPageSlide({
   sessionEnded: boolean;
 }) {
   const portrait = resolvePortrait(page, studentId);
-  const hasStoryMedia =
-    page.storyImages.length > 0 ||
-    (showAudio && page.storyAudios.length > 0);
+  const audios = showAudio ? page.storyAudios : [];
 
   return (
     <article className="belajar-book__page" aria-label="Halaman cerita">
-      <div className="flex flex-col gap-3 px-3 pb-3 pt-1 sm:gap-4 sm:px-5 md:px-8 lg:px-10">
+      <div className="flex h-full min-h-0 flex-col gap-3 px-3 pb-3 pt-1 sm:gap-4 sm:px-5 md:px-8 lg:px-10">
         <div className="grid gap-3 md:grid-cols-2 md:items-stretch md:gap-5">
           <div className="belajar-portrait p-2 sm:p-3">
             {portrait ? (
@@ -100,16 +98,11 @@ function StoryPageSlide({
           </div>
         </div>
 
-        {hasStoryMedia ? (
+        {page.storyImages.length > 0 ? (
           <div className="belajar-page-card space-y-3 p-3 sm:p-4">
             {page.storyImages.map((image) => (
               <PageImage key={image.id} image={image} variant="story" />
             ))}
-            {showAudio
-              ? page.storyAudios.map((audio) => (
-                  <PageAudioButton key={audio.id} audio={audio} />
-                ))
-              : null}
           </div>
         ) : null}
 
@@ -120,6 +113,12 @@ function StoryPageSlide({
             mcq={page.mcq}
             disabled={sessionEnded}
           />
+        ) : null}
+
+        {audios.length > 0 ? (
+          <div className="mt-auto flex justify-center pt-2">
+            <PageAudioDock audios={audios} />
+          </div>
         ) : null}
       </div>
     </article>

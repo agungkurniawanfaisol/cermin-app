@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  CircleHelp,
   Lock,
   Menu,
   Route,
@@ -40,6 +41,13 @@ const NAV: readonly {
     label: "Keamanan",
     hint: "Akses peran & media privat",
     icon: Lock,
+  },
+  {
+    href: "#faq",
+    sectionId: "faq",
+    label: "FAQ",
+    hint: "Pertanyaan umum",
+    icon: CircleHelp,
   },
 ] as const;
 

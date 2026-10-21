@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Eye, PencilLine, BookOpen } from "lucide-react";
 import type { ListedStory } from "@/server/actions/stories";
+import { DeleteStoryDialog } from "@/components/dashboard/delete-story-dialog";
 import { StoryDetailSheet } from "@/components/dashboard/story-detail-sheet";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -22,6 +23,8 @@ export type StoryListItem = ListedStory & {
 type Props = {
   stories: StoryListItem[];
   canManage: boolean;
+  /** Tombol hapus (arsip + alasan) — Admin only. */
+  canArchive?: boolean;
 };
 
 function descriptionSnippet(text: string): string {
@@ -48,7 +51,11 @@ const iconBtnPrimary = `${iconBtnBase} bg-[var(--cermin-accent,#3d7c6b)] text-wh
 
 const iconBtnSecondary = `${iconBtnBase} border border-[var(--cermin-border,#d9e2ec)] bg-[var(--surface,#ffffff)] text-[var(--text,#1f2933)] hover:bg-[var(--accent-soft,#e6f2ee)]`;
 
-export function StoryList({ stories, canManage }: Props) {
+export function StoryList({
+  stories,
+  canManage,
+  canArchive = false,
+}: Props) {
   const [detailId, setDetailId] = useState<string | null>(null);
   const detailStory = stories.find((s) => s.id === detailId) ?? null;
 
@@ -112,6 +119,13 @@ export function StoryList({ stories, canManage }: Props) {
                     >
                       <ContinueIcon primary={story.continuePrimary} />
                     </Link>
+                    {canArchive && story.status !== "ARCHIVED" ? (
+                      <DeleteStoryDialog
+                        storyId={story.id}
+                        title={story.title}
+                        variant="icon"
+                      />
+                    ) : null}
                   </div>
                 </div>
                 <p className="mt-2 text-sm text-[var(--cermin-muted,#5c6b73)]">
@@ -150,6 +164,21 @@ export function StoryList({ stories, canManage }: Props) {
                       {story.createdBy.name}
                     </dd>
                   </div>
+                  {story.status === "ARCHIVED" && story.archivedReason ? (
+                    <div className="col-span-2">
+                      <dt className="text-xs text-[var(--cermin-muted,#5c6b73)]">
+                        Alasan hapus
+                      </dt>
+                      <dd className="text-[var(--text,#1f2933)]">
+                        {story.archivedReason}
+                        {story.archivedBy ? (
+                          <span className="mt-0.5 block text-xs text-[var(--cermin-muted,#5c6b73)]">
+                            oleh {story.archivedBy.name}
+                          </span>
+                        ) : null}
+                      </dd>
+                    </div>
+                  ) : null}
                 </dl>
               </article>
             </li>
@@ -166,7 +195,7 @@ export function StoryList({ stories, canManage }: Props) {
               <th className="px-4 py-3 font-medium">Kategori</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Halaman</th>
-              <th className="w-[7.5rem] px-4 py-3 text-right font-medium">
+              <th className="w-[10rem] px-4 py-3 text-right font-medium">
                 Aksi
               </th>
             </tr>
@@ -198,7 +227,15 @@ export function StoryList({ stories, canManage }: Props) {
                     {story.category.name}
                   </td>
                   <td className="px-4 py-3 align-middle">
-                    {STATUS_LABEL[story.status] ?? story.status}
+                    <span>{STATUS_LABEL[story.status] ?? story.status}</span>
+                    {story.status === "ARCHIVED" && story.archivedReason ? (
+                      <p
+                        className="mt-1 max-w-[10rem] text-xs text-[var(--cermin-muted,#5c6b73)]"
+                        title={story.archivedReason}
+                      >
+                        {story.archivedReason}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 align-middle tabular-nums">
                     {story.pageCount}
@@ -227,6 +264,13 @@ export function StoryList({ stories, canManage }: Props) {
                       >
                         <ContinueIcon primary={story.continuePrimary} />
                       </Link>
+                      {canArchive && story.status !== "ARCHIVED" ? (
+                        <DeleteStoryDialog
+                          storyId={story.id}
+                          title={story.title}
+                          variant="icon"
+                        />
+                      ) : null}
                     </div>
                   </td>
                 </tr>

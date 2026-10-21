@@ -8,12 +8,14 @@ import {
   Users,
   Volume2,
 } from "lucide-react";
+import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingHeader } from "@/components/landing/landing-header";
 import { LandingInstitutionBar } from "@/components/landing/landing-institution-bar";
 import { LandingPhotoCarousel } from "@/components/landing/landing-photo-carousel";
 import { LandingScrollTop } from "@/components/landing/landing-scroll-top";
 import type { BrandingPublic } from "@/lib/branding-public";
+import type { PublicFaq } from "@/server/queries/faqs-public";
 
 const CAROUSEL_SLIDES = [
   {
@@ -116,8 +118,10 @@ function SectionHeading({
 
 export function LandingPage({
   branding,
+  faqs,
 }: {
   branding: BrandingPublic;
+  faqs: PublicFaq[];
 }) {
   return (
     <div className="cermin-route-enter landing-root relative flex min-h-dvh flex-1 flex-col overflow-x-hidden scroll-smooth bg-[var(--bg)] text-[var(--text)] [scroll-padding-top:4.5rem] sm:[scroll-padding-top:5.25rem]">
@@ -295,6 +299,20 @@ export function LandingPage({
                 </li>
               ))}
             </ul>
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="faq"
+          className="border-t border-[var(--cermin-border)] bg-[var(--surface)]"
+        >
+          <div className="mx-auto w-full max-w-7xl space-y-12 px-4 py-16 sm:px-8 sm:py-20">
+            <SectionHeading
+              id="faq"
+              title="Pertanyaan umum"
+              lead="Jawaban singkat sebelum Anda masuk. Detail lebih lengkap tersedia di dasbor setelah login."
+            />
+            <LandingFaq faqs={faqs} />
           </div>
         </section>
 

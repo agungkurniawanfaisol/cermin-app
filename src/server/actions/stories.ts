@@ -29,6 +29,7 @@ import {
   requireSession,
 } from "@/server/policies/access";
 import {
+  archiveStorySchema,
   createPageSchema,
   createStorySchema,
   pageIdSchema,
@@ -39,6 +40,7 @@ import {
   transitionStoryStatusSchema,
   updatePageSchema,
   updateStorySchema,
+  type ArchiveStoryInput,
   type CreatePageInput,
   type CreateStoryInput,
   type ReorderPagesInput,
@@ -114,6 +116,9 @@ export type ListedStory = {
   pageCount: number;
   category: { id: string; name: string };
   createdBy: { id: string; name: string };
+  archivedReason: string | null;
+  archivedAt: Date | null;
+  archivedBy: { id: string; name: string } | null;
 };
 
 /** Ringkasan untuk sheet detail/pratinjau di daftar cerita. */
@@ -213,8 +218,11 @@ export async function listStoriesForViewer(
         publishedAt: true,
         updatedAt: true,
         createdAt: true,
+        archivedReason: true,
+        archivedAt: true,
         category: { select: { id: true, name: true } },
         createdBy: { select: { id: true, name: true } },
+        archivedBy: { select: { id: true, name: true } },
         _count: { select: { pages: true } },
       },
       orderBy,
@@ -233,6 +241,9 @@ export async function listStoriesForViewer(
     pageCount: row._count.pages,
     category: row.category,
     createdBy: row.createdBy,
+    archivedReason: row.archivedReason,
+    archivedAt: row.archivedAt,
+    archivedBy: row.archivedBy,
   }));
   const meta = paginationMeta({
     page: parsed.page,
@@ -378,6 +389,7 @@ export type StoryEditorShell = {
   pagesWithMedia: number;
   /** IMAGE story-level (pageId null) — gambar utama admin. */
   coverMediaId: string | null;
+  archivedReason: string | null;
 };
 
 export async function getStoryEditorShell(
@@ -403,6 +415,7 @@ export async function getStoryEditorShell(
       status: true,
       createdById: true,
       updatedAt: true,
+      archivedReason: true,
       category: { select: { id: true, name: true } },
       createdBy: { select: { id: true, name: true, email: true } },
       media: {
@@ -451,6 +464,7 @@ export async function getStoryEditorShell(
     pagesWithText,
     pagesWithMedia,
     coverMediaId: story.media[0]?.id ?? null,
+    archivedReason: story.archivedReason,
   };
 }
 
@@ -1030,6 +1044,12 @@ export async function transitionStoryStatus(
     }
 
     const toStatus = parsed.data.toStatus as StoryStatus;
+    if (toStatus === StoryStatus.ARCHIVED) {
+      return {
+        ok: false,
+        error: "Arsipkan lewat Hapus cerita dengan alasan wajib",
+      };
+    }
     if (!canUserTransitionStoryStatus(user, story.status, toStatus)) {
       return {
         ok: false,
@@ -1071,9 +1091,7 @@ export async function transitionStoryStatus(
     const auditAction =
       toStatus === StoryStatus.PUBLISHED
         ? "story.publish"
-        : toStatus === StoryStatus.ARCHIVED
-          ? "story.archive"
-          : "story.status_transition";
+        : "story.status_transition";
 
     await writeAudit({
       actorId: user.id,
@@ -1089,6 +1107,66 @@ export async function transitionStoryStatus(
     return {
       ok: false,
       error: toActionError(error, "Gagal mengubah status cerita"),
+    };
+  }
+}
+
+/** Hapus lunak cerita — Admin; alasan + aktor tersimpan. */
+export async function archiveStory(
+  input: ArchiveStoryInput,
+): Promise<ActionResult<{ id: string; status: StoryStatus }>> {
+  try {
+    const admin = await requireRole("ADMIN");
+    const parsed = archiveStorySchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
+      };
+    }
+
+    const story = await prisma.story.findUnique({
+      where: { id: parsed.data.storyId },
+      select: { id: true, status: true, title: true },
+    });
+    if (!story) {
+      return { ok: false, error: "Cerita tidak ditemukan" };
+    }
+    if (story.status === StoryStatus.ARCHIVED) {
+      return { ok: false, error: "Cerita sudah diarsipkan" };
+    }
+
+    const now = new Date();
+    const updated = await prisma.story.update({
+      where: { id: story.id },
+      data: {
+        status: StoryStatus.ARCHIVED,
+        archivedReason: parsed.data.reason,
+        archivedAt: now,
+        archivedById: admin.id,
+      },
+      select: { id: true, status: true },
+    });
+
+    await writeAudit({
+      actorId: admin.id,
+      action: "story.archive",
+      entityType: "Story",
+      entityId: story.id,
+      metadata: {
+        from: story.status,
+        to: StoryStatus.ARCHIVED,
+        reason: parsed.data.reason,
+        title: story.title.slice(0, 120),
+      },
+    });
+
+    revalidateStoryPaths(story.id);
+    return { ok: true, data: { id: updated.id, status: updated.status } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toActionError(error, "Gagal menghapus cerita"),
     };
   }
 }

@@ -81,6 +81,7 @@ export async function createFaq(
     });
 
     revalidatePath("/dashboard/bantuan");
+    revalidatePath("/");
     return { ok: true, data: { id: faq.id } };
   } catch (error) {
     return { ok: false, error: toActionError(error, "Gagal membuat FAQ") };
@@ -135,6 +136,7 @@ export async function updateFaq(
     });
 
     revalidatePath("/dashboard/bantuan");
+    revalidatePath("/");
     return { ok: true, data: { id: faq.id } };
   } catch (error) {
     return { ok: false, error: toActionError(error, "Gagal memperbarui FAQ") };
@@ -173,6 +175,7 @@ export async function deleteFaq(input: {
     });
 
     revalidatePath("/dashboard/bantuan");
+    revalidatePath("/");
     return { ok: true, data: { id: existing.id } };
   } catch (error) {
     return { ok: false, error: toActionError(error, "Gagal menghapus FAQ") };

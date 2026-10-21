@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { transitionStoryStatus } from "@/server/actions/stories";
+import { DeleteStoryDialog } from "@/components/dashboard/delete-story-dialog";
 import { Button } from "@/components/ui/button";
 import type { StoryStatusValue } from "@/server/validations/story";
 
@@ -65,25 +66,29 @@ function pipelineIndex(status: StoryStatusValue): number {
 
 export function StatusTimeline({
   storyId,
+  title,
   currentStatus,
   targets,
+  archivedReason,
 }: {
   storyId: string;
+  title: string;
   currentStatus: StoryStatusValue;
   targets: StoryStatusValue[];
+  archivedReason?: string | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const targetSet = new Set(targets);
   const currentIdx = pipelineIndex(currentStatus);
 
   function onTransition(toStatus: StoryStatusValue) {
     setError(null);
     if (toStatus === "ARCHIVED") {
-      if (!window.confirm("Arsipkan cerita ini? Konten tidak bisa diedit lagi.")) {
-        return;
-      }
+      setArchiveOpen(true);
+      return;
     }
     if (toStatus === "PUBLISHED") {
       if (
@@ -236,8 +241,24 @@ export function StatusTimeline({
           <p className="mt-1 text-sm text-[var(--cermin-muted,#5c6b73)]">
             {STATUS_DESC.ARCHIVED}
           </p>
+          {archivedReason ? (
+            <p className="mt-2 text-sm text-[var(--text,#1f2933)]">
+              <span className="text-xs text-[var(--cermin-muted,#5c6b73)]">
+                Alasan:{" "}
+              </span>
+              {archivedReason}
+            </p>
+          ) : null}
         </div>
       ) : null}
+
+      <DeleteStoryDialog
+        storyId={storyId}
+        title={title}
+        hideTrigger
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+      />
 
       {(canReturnDraft || canArchive) && currentStatus !== "ARCHIVED" ? (
         <div className="space-y-3 border-t border-[var(--border,#d9e2ec)] pt-4">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PageAudioButton, PageImage } from "@/components/belajar/page-media";
+import { PageAudioDock, PageImage } from "@/components/belajar/page-media";
 
 export type PreviewPageMedia = {
   id: string;
@@ -189,7 +189,7 @@ export function StoryPreviewPanel({ title, pages, students }: Props) {
         >
           {resolvedPages.map(({ page, media }) => (
             <article key={page.id} className="belajar-book__page">
-              <div className="flex flex-col gap-4 px-4 pb-4 sm:px-6">
+              <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 sm:px-6">
                 <div className="grid gap-4 md:grid-cols-2 md:items-stretch md:gap-6">
                   <div className="belajar-portrait p-3 sm:p-4">
                     {media.portraitImage ? (
@@ -215,17 +215,20 @@ export function StoryPreviewPanel({ title, pages, students }: Props) {
                     </p>
                   </div>
                 </div>
-                {media.storyAudios.length > 0 || media.storyImages.length > 0 ? (
+                {media.storyImages.length > 0 ? (
                   <div className="belajar-page-card space-y-4 p-4 sm:p-5">
                     <p className="text-sm font-semibold tracking-wide text-[#5c6b73] uppercase">
                       Cerita
                     </p>
-                    {media.storyAudios.map((audio) => (
-                      <PageAudioButton key={audio.id} audio={audio} />
-                    ))}
                     {media.storyImages.map((image) => (
                       <PageImage key={image.id} image={image} variant="story" />
                     ))}
+                  </div>
+                ) : null}
+
+                {media.storyAudios.length > 0 ? (
+                  <div className="mt-auto flex justify-center pt-2">
+                    <PageAudioDock audios={media.storyAudios} />
                   </div>
                 ) : null}
               </div>

@@ -489,18 +489,22 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 0.35rem;
-  height: 2.75rem;
-  padding: 0.25rem 0.5rem;
+  gap: 0.4rem;
+  height: 2.5rem;
+  padding: 0.15rem 0.25rem;
 }
 
 .belajar-sound-viz__bar {
-  width: 0.4rem;
+  width: 0.45rem;
   min-height: 0.45rem;
   border-radius: 999px;
-  background-color: var(--belajar-accent, #3d7c6b);
-  opacity: 0.45;
+  background-color: currentColor;
+  opacity: 0.55;
   transform-origin: bottom center;
+}
+
+button.group .belajar-sound-viz {
+  color: inherit;
 }
 
 .belajar-sound-viz--idle .belajar-sound-viz__bar:nth-child(1),

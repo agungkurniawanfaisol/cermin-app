@@ -241,6 +241,7 @@ async function CeritaDetailContent({
           shell.status === StoryStatus.DRAFT &&
           shell.createdById === user.id)
       }
+      archivedReason={shell.archivedReason}
     />
   );
 }

@@ -25,8 +25,10 @@ import {
   type AcceptInviteInput,
   type CreateInviteInput,
 } from "@/server/validations/invite";
-
-const disableUserIdSchema = z.string().uuid("ID pengguna tidak valid");
+import {
+  disableUserSchema,
+  type DisableUserInput,
+} from "@/server/validations/user";
 
 export type ActionOk<T> = { ok: true; data: T };
 export type ActionErr = { ok: false; error: string };
@@ -200,6 +202,9 @@ export type ListedUser = {
   role: UserRole;
   status: UserStatus;
   createdAt: Date;
+  disabledReason: string | null;
+  disabledAt: Date | null;
+  disabledBy: { id: string; name: string } | null;
 };
 
 export async function listUsers(
@@ -254,6 +259,9 @@ export async function listUsers(
         role: true,
         status: true,
         createdAt: true,
+        disabledReason: true,
+        disabledAt: true,
+        disabledBy: { select: { id: true, name: true } },
       },
       orderBy,
       skip,
@@ -270,24 +278,27 @@ export async function listUsers(
 }
 
 export async function disableUser(
-  userId: string,
+  input: DisableUserInput,
 ): Promise<ActionResult<{ userId: string }>> {
   try {
     const admin = await requireRole("ADMIN");
-    const parsedId = disableUserIdSchema.safeParse(userId);
-    if (!parsedId.success) {
+    const parsed = disableUserSchema.safeParse(input);
+    if (!parsed.success) {
       return {
         ok: false,
-        error: parsedId.error.issues[0]?.message ?? "ID pengguna tidak valid",
+        error: parsed.error.issues[0]?.message ?? "Data tidak valid",
       };
     }
-    const id = parsedId.data;
+    const { userId: id, reason } = parsed.data;
 
     if (admin.id === id) {
-      return { ok: false, error: "Tidak dapat menonaktifkan akun sendiri" };
+      return { ok: false, error: "Tidak dapat menghapus akun sendiri" };
     }
 
-    const user = await prisma.user.findUnique({ where: { id } });
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, role: true, status: true },
+    });
     if (!user) {
       return { ok: false, error: "Pengguna tidak ditemukan" };
     }
@@ -295,9 +306,15 @@ export async function disableUser(
       return { ok: false, error: "Pengguna sudah nonaktif" };
     }
 
+    const now = new Date();
     await prisma.user.update({
       where: { id },
-      data: { status: UserStatus.DISABLED },
+      data: {
+        status: UserStatus.DISABLED,
+        disabledReason: reason,
+        disabledAt: now,
+        disabledById: admin.id,
+      },
     });
 
     await writeAudit({
@@ -305,7 +322,7 @@ export async function disableUser(
       action: "user.disable",
       entityType: "User",
       entityId: id,
-      metadata: { email: user.email, role: user.role },
+      metadata: { email: user.email, role: user.role, reason },
     });
 
     revalidatePath("/dashboard/pengguna");
@@ -313,7 +330,7 @@ export async function disableUser(
   } catch (error) {
     return {
       ok: false,
-      error: toActionError(error, "Gagal menonaktifkan pengguna"),
+      error: toActionError(error, "Gagal menghapus pengguna"),
     };
   }
 }
