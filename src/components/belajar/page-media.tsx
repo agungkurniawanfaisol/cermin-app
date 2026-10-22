@@ -96,7 +96,7 @@ export function PageImage({
   );
 }
 
-const SOUND_BAR_COUNT = 7;
+const SOUND_BAR_COUNT = 5;
 
 function SoundWaveGraphic({ playing }: { playing: boolean }) {
   return (
@@ -190,7 +190,7 @@ export function PageAudioButton({ audio }: { audio: MediaRef }) {
       : "Putar suara";
 
   return (
-    <div className="mx-auto flex w-full max-w-xs flex-col items-center gap-2">
+    <div className="mx-auto flex w-full max-w-[14rem] flex-col items-center gap-1.5">
       <button
         type="button"
         onClick={() => {
@@ -202,16 +202,16 @@ export function PageAudioButton({ audio }: { audio: MediaRef }) {
         aria-label={label}
         className={
           playing
-            ? "group flex min-h-[5.5rem] w-full flex-col items-center justify-center gap-2 rounded-3xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent-soft,#e6f2ee)] px-5 py-4 text-[var(--belajar-accent,#3d7c6b)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--belajar-accent-soft,#e6f2ee)_85%,white)] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
-            : "group flex min-h-[5.5rem] w-full flex-col items-center justify-center gap-2 rounded-3xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent,#3d7c6b)] px-5 py-4 text-white shadow-sm transition-colors hover:bg-[#34695b] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
+            ? "group inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent-soft,#e6f2ee)] px-3 py-2 text-[var(--belajar-accent,#3d7c6b)] transition-colors hover:bg-[color-mix(in_srgb,var(--belajar-accent-soft,#e6f2ee)_85%,white)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
+            : "group inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent,#3d7c6b)] px-3 py-2 text-white transition-colors hover:bg-[#34695b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-60"
         }
       >
         <SoundWaveGraphic playing={playing} />
         <span
           className={
             playing
-              ? "text-base font-semibold text-[var(--belajar-ink,#1f2933)]"
-              : "text-base font-semibold text-white"
+              ? "text-sm font-medium text-[var(--belajar-ink,#1f2933)]"
+              : "text-sm font-medium text-white"
           }
           role="status"
           aria-live="polite"
@@ -220,7 +220,7 @@ export function PageAudioButton({ audio }: { audio: MediaRef }) {
         </span>
       </button>
       {error ? (
-        <p className="text-center text-base text-[#9b1c1c]" role="alert">
+        <p className="text-center text-sm text-[#9b1c1c]" role="alert">
           {error}
         </p>
       ) : null}
@@ -237,7 +237,7 @@ export function PageAudioDock({
   if (audios.length === 0) return null;
   return (
     <div
-      className="mx-auto flex w-full max-w-md flex-col items-center gap-3 px-2 pt-2 pb-1"
+      className="mx-auto flex w-full max-w-sm flex-col items-center gap-2 px-2 pt-1.5 pb-0.5"
       role="group"
       aria-label="Suara cerita"
     >

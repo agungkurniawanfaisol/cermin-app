@@ -716,6 +716,150 @@ async function ensureStory(
   return story;
 }
 
+type McqChoiceSeed = { key: string; labelText: string };
+
+type McqExampleSeed = {
+  prompt: string;
+  correctKey: string;
+  choices: McqChoiceSeed[];
+};
+
+/** Contoh soal tenang — teks saja (tanpa gambar) agar seed tidak butuh Storage. */
+function mcqExampleForPage(
+  storyTitle: string,
+  sortOrder: number,
+  bodyText: string,
+): McqExampleSeed {
+  const titled: Record<string, McqExampleSeed[]> = {
+    "Giliran Bermain": [
+      {
+        prompt: "Apa yang dilakukan saat bermain bersama teman?",
+        correctKey: "B",
+        choices: [
+          { key: "A", labelText: "Merebut mainan" },
+          { key: "B", labelText: "Bermain bersama" },
+          { key: "C", labelText: "Pergi sendirian" },
+          { key: "D", labelText: "Berteriak keras" },
+        ],
+      },
+      {
+        prompt: "Jika belum giliran, apa yang bisa dilakukan?",
+        correctKey: "A",
+        choices: [
+          { key: "A", labelText: "Menunggu dengan tenang" },
+          { key: "B", labelText: "Merebut giliran" },
+          { key: "C", labelText: "Meninggalkan teman" },
+          { key: "D", labelText: "Menangis keras" },
+        ],
+      },
+      {
+        prompt: "Menunggu giliran itu…",
+        correctKey: "C",
+        choices: [
+          { key: "A", labelText: "Tidak perlu" },
+          { key: "B", labelText: "Sulit dan salah" },
+          { key: "C", labelText: "Bisa dilakukan dengan tenang" },
+          { key: "D", labelText: "Hanya untuk orang dewasa" },
+        ],
+      },
+      {
+        prompt: "Ketika giliran datang, apa yang terjadi?",
+        correctKey: "B",
+        choices: [
+          { key: "A", labelText: "Harus marah" },
+          { key: "B", labelText: "Boleh bermain dengan senang" },
+          { key: "C", labelText: "Harus diam saja" },
+          { key: "D", labelText: "Mainan diambil orang lain" },
+        ],
+      },
+    ],
+    "Mengikuti permainan sesuai aturan": [
+      {
+        prompt: "Saat bermain, aturan permainan berguna untuk apa?",
+        correctKey: "B",
+        choices: [
+          { key: "A", labelText: "Membuat semua orang bingung" },
+          { key: "B", labelText: "Agar bermain adil dan aman" },
+          { key: "C", labelText: "Supaya tidak boleh bermain" },
+          { key: "D", labelText: "Hanya untuk wasit" },
+        ],
+      },
+      {
+        prompt: "Jika teman sedang menunggu giliran, apa yang baik dilakukan?",
+        correctKey: "A",
+        choices: [
+          { key: "A", labelText: "Menghormati giliran teman" },
+          { key: "B", labelText: "Mendorong teman" },
+          { key: "C", labelText: "Mengambil mainan paksa" },
+          { key: "D", labelText: "Berteriak ke teman" },
+        ],
+      },
+      {
+        prompt: "Mengikuti aturan permainan membuat…",
+        correctKey: "C",
+        choices: [
+          { key: "A", labelText: "Teman sedih" },
+          { key: "B", labelText: "Permainan berantakan" },
+          { key: "C", labelText: "Bermain lebih tenang bersama" },
+          { key: "D", labelText: "Harus berhenti bermain" },
+        ],
+      },
+    ],
+  };
+
+  const byTitle = titled[storyTitle];
+  if (byTitle && byTitle[sortOrder - 1]) {
+    return byTitle[sortOrder - 1]!;
+  }
+
+  const snippet = bodyText.replace(/\s+/g, " ").trim().slice(0, 48);
+  return {
+    prompt: snippet
+      ? `Dari cerita ini: apa yang paling tepat?`
+      : `Apa yang baik dilakukan di halaman ${sortOrder}?`,
+    correctKey: "A",
+    choices: [
+      { key: "A", labelText: "Tenang dan mengikuti alur cerita" },
+      { key: "B", labelText: "Berteriak dan marah" },
+      { key: "C", labelText: "Meninggalkan teman" },
+      { key: "D", labelText: "Merebut giliran" },
+    ],
+  };
+}
+
+async function ensurePageMcqExample(opts: {
+  pageId: string;
+  storyTitle: string;
+  sortOrder: number;
+  bodyText: string;
+}): Promise<boolean> {
+  const existing = await prisma.pageMcq.findUnique({
+    where: { pageId: opts.pageId },
+    select: { id: true },
+  });
+  if (existing) return false;
+
+  const seed = mcqExampleForPage(
+    opts.storyTitle,
+    opts.sortOrder,
+    opts.bodyText,
+  );
+  await prisma.pageMcq.create({
+    data: {
+      pageId: opts.pageId,
+      prompt: seed.prompt,
+      correctKey: seed.correctKey,
+      choices: {
+        create: seed.choices.map((c) => ({
+          key: c.key,
+          labelText: c.labelText,
+        })),
+      },
+    },
+  });
+  return true;
+}
+
 async function ensureSession(opts: {
   studentId: string;
   storyId: string;
@@ -1230,6 +1374,34 @@ async function main() {
   console.log("  page illustrations this run:", illustrationCount);
   console.log("  page portraits this run:", portraitCount);
 
+  // Contoh soal MCQ per halaman (idempotent) — semua cerita PUBLISHED di DB
+  // (termasuk yang dibuat manual, bukan hanya daftar storySeeds).
+  const allPublishedPages = await prisma.storyPage.findMany({
+    where: { story: { status: StoryStatus.PUBLISHED } },
+    orderBy: [{ storyId: "asc" }, { sortOrder: "asc" }],
+    select: {
+      id: true,
+      sortOrder: true,
+      bodyText: true,
+      story: { select: { title: true } },
+    },
+  });
+  let mcqCount = 0;
+  for (const page of allPublishedPages) {
+    const created = await ensurePageMcqExample({
+      pageId: page.id,
+      storyTitle: page.story.title,
+      sortOrder: page.sortOrder,
+      bodyText: page.bodyText,
+    });
+    if (created) mcqCount += 1;
+  }
+  console.log(
+    "  page MCQ examples this run:",
+    mcqCount,
+    `(of ${allPublishedPages.length} published pages)`,
+  );
+
   // Many sessions across students / therapists / parents
   let sessionCount = 0;
   for (let i = 0; i < students.length; i++) {
@@ -1354,6 +1526,7 @@ async function main() {
     prisma.learningSession.count(),
     prisma.parentLink.count({ where: { isActive: true } }),
     prisma.therapistAssignment.count({ where: { endedAt: null } }),
+    prisma.pageMcq.count(),
   ]);
 
   console.log("---");
@@ -1363,6 +1536,7 @@ async function main() {
   console.log("Sessions:", counts[3]);
   console.log("Parent links:", counts[4]);
   console.log("Active assignments:", counts[5]);
+  console.log("Page MCQs:", counts[6]);
   console.log("Sessions touched this run ~", sessionCount);
   console.log("Demo password (non-admin):", SEED_DEMO_PASSWORD);
   console.log("Admin:", admin.email);

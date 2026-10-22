@@ -98,25 +98,28 @@ function StoryPageSlide({
           </div>
         </div>
 
+        {/* Soal dulu (shrink-0) — jangan di bawah gambar/audio agar tidak terdorong keluar viewport. */}
+        {page.mcq ? (
+          <div className="shrink-0">
+            <PageMcqBlock
+              sessionId={sessionId}
+              studentId={studentId}
+              mcq={page.mcq}
+              disabled={sessionEnded}
+            />
+          </div>
+        ) : null}
+
         {page.storyImages.length > 0 ? (
-          <div className="belajar-page-card space-y-3 p-3 sm:p-4">
+          <div className="belajar-page-card shrink-0 space-y-3 p-3 sm:p-4">
             {page.storyImages.map((image) => (
               <PageImage key={image.id} image={image} variant="story" />
             ))}
           </div>
         ) : null}
 
-        {page.mcq ? (
-          <PageMcqBlock
-            sessionId={sessionId}
-            studentId={studentId}
-            mcq={page.mcq}
-            disabled={sessionEnded}
-          />
-        ) : null}
-
         {audios.length > 0 ? (
-          <div className="mt-auto flex justify-center pt-2">
+          <div className="flex shrink-0 justify-center pt-1">
             <PageAudioDock audios={audios} />
           </div>
         ) : null}
