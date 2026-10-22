@@ -37,8 +37,14 @@ export async function assignTherapist(
     const { studentId, therapistId } = parsed.data;
 
     const [student, therapist] = await Promise.all([
-      prisma.student.findUnique({ where: { id: studentId } }),
-      prisma.user.findUnique({ where: { id: therapistId } }),
+      prisma.student.findUnique({
+        where: { id: studentId },
+        select: { id: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: therapistId },
+        select: { id: true, role: true, status: true },
+      }),
     ]);
 
     if (!student) {
@@ -166,8 +172,14 @@ export async function linkParent(
     const { studentId, parentId, relationLabel } = parsed.data;
 
     const [student, parent] = await Promise.all([
-      prisma.student.findUnique({ where: { id: studentId } }),
-      prisma.user.findUnique({ where: { id: parentId } }),
+      prisma.student.findUnique({
+        where: { id: studentId },
+        select: { id: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: parentId },
+        select: { id: true, role: true, status: true },
+      }),
     ]);
 
     if (!student) {

@@ -43,19 +43,19 @@ enum TextSize {
 }
 
 model User {
-  id            String     @id @default(uuid()) @db.Uuid
-  name          String
-  email         String     @unique
-  emailVerified Boolean    @default(false)
-  image         String?
-  role          UserRole   @default(ORANG_TUA)
-  status        UserStatus @default(ACTIVE)
+  id             String     @id @default(uuid()) @db.Uuid
+  name           String
+  email          String     @unique
+  emailVerified  Boolean    @default(false)
+  image          String?
+  role           UserRole   @default(ORANG_TUA)
+  status         UserStatus @default(ACTIVE)
   /// Alasan nonaktif/hapus lunak — wajib saat status → DISABLED (Admin).
   disabledReason String?
   disabledAt     DateTime?
-  disabledById   String?   @db.Uuid
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  disabledById   String?    @db.Uuid
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   disabledBy           User?                 @relation("UserDisabler", fields: [disabledById], references: [id], onDelete: SetNull)
   usersDisabled        User[]                @relation("UserDisabler")
@@ -73,11 +73,11 @@ model User {
   mediaCreated         MediaAsset[]
   sessionsLed          LearningSession[]
   observations         SessionObservation[]
-  faqsCreated          FaqItem[]        @relation("FaqCreator")
-  guidesUploaded       GuideDocument[] @relation("GuideUploader")
+  faqsCreated          FaqItem[]             @relation("FaqCreator")
+  guidesUploaded       GuideDocument[]       @relation("GuideUploader")
 
   // List pengguna: filter peran/status + sort
-  @@index([role, status])
+  @@index([role, status, name])
   @@index([status, createdAt(sort: Desc)])
   @@index([name])
   @@map("users")
@@ -94,6 +94,7 @@ model Session {
   userId    String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("sessions")
 }
 
@@ -114,6 +115,7 @@ model Account {
   updatedAt             DateTime  @updatedAt
 
   @@unique([providerId, accountId])
+  @@index([userId])
   @@map("accounts")
 }
 
@@ -141,43 +143,43 @@ model UserPreference {
 }
 
 model Student {
-  id          String        @id @default(uuid()) @db.Uuid
+  id                     String        @id @default(uuid()) @db.Uuid
   /// Nama panggilan — dipakai di daftar & child mode.
-  displayName String
+  displayName            String
   /// Nama lengkap sesuai dokumen / identitas.
-  fullName    String?
-  dateOfBirth DateTime?     @db.Date
-  homeAddress String?
-  rt          String?       @db.VarChar(10)
-  rw          String?       @db.VarChar(10)
+  fullName               String?
+  dateOfBirth            DateTime?     @db.Date
+  homeAddress            String?
+  rt                     String?       @db.VarChar(10)
+  rw                     String?       @db.VarChar(10)
   /// Nomor telepon kontak (biasanya orang tua / wali).
-  phone       String?       @db.VarChar(32)
-  emergencyContactName  String?
-  emergencyContactPhone String? @db.VarChar(32)
+  phone                  String?       @db.VarChar(32)
+  emergencyContactName   String?
+  emergencyContactPhone  String?       @db.VarChar(32)
   /// Bahasa yang dipakai di rumah (mis. Indonesia, Sunda).
-  homeLanguage String?
+  homeLanguage           String?
   /// Preferensi sensorik untuk panduan sesi / child mode.
-  preferQuiet    Boolean @default(false)
-  preferDimLight Boolean @default(false)
-  sensoryNotes   String?
+  preferQuiet            Boolean       @default(false)
+  preferDimLight         Boolean       @default(false)
+  sensoryNotes           String?
   /// Alergi / catatan medis singkat — hanya Admin.
-  allergies String?
+  allergies              String?
   /// Jika true, sesi tidak bisa dimulai tanpa foto profil.
-  requirePhotoForSession Boolean @default(false)
+  requirePhotoForSession Boolean       @default(false)
   /// Private Storage key in bucket cermin-media (avatars/students/…). Not a public URL.
-  imageKey         String?
+  imageKey               String?
   /// Foto ayah (profil keluarga) — opsional; bukan foto akun login Ortu.
-  fatherImageKey   String?
+  fatherImageKey         String?
   /// Foto ibu (profil keluarga) — opsional; bukan foto akun login Ortu.
-  motherImageKey   String?
-  adminNotes  String?
-  status      StudentStatus @default(ACTIVE)
+  motherImageKey         String?
+  adminNotes             String?
+  status                 StudentStatus @default(ACTIVE)
   /// Alasan arsip/hapus lunak — wajib saat status → ARCHIVED (Admin).
-  archivedReason String?
-  archivedAt     DateTime?
-  archivedById   String?   @db.Uuid
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  archivedReason         String?
+  archivedAt             DateTime?
+  archivedById           String?       @db.Uuid
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
   therapistAssignments TherapistAssignment[]
   parentLinks          ParentLink[]
@@ -203,7 +205,7 @@ model TherapistAssignment {
   assignedBy   User      @relation("AssignmentCreator", fields: [assignedById], references: [id])
 
   @@index([therapistId])
-  @@index([studentId])
+  @@index([studentId, endedAt])
   // listActiveStudents / authz: therapistId + endedAt IS NULL
   @@index([therapistId, endedAt])
   // Partial unique: at most one active assignment per (therapistId, studentId).
@@ -223,7 +225,7 @@ model ParentLink {
   student       Student @relation(fields: [studentId], references: [id])
 
   @@unique([parentId, studentId])
-  @@index([studentId])
+  @@index([studentId, isActive])
   // userHasAnyStudentAccess / list ortu: parentId + isActive
   @@index([parentId, isActive])
   @@map("parent_links")
@@ -242,6 +244,7 @@ model InviteToken {
   createdAt   DateTime  @default(now())
 
   @@index([email])
+  @@index([usedAt, expiresAt])
   @@map("invite_tokens")
 }
 
@@ -261,23 +264,23 @@ model StoryCategory {
 }
 
 model Story {
-  id                 String      @id @default(uuid()) @db.Uuid
-  categoryId         String      @db.Uuid
+  id                 String            @id @default(uuid()) @db.Uuid
+  categoryId         String            @db.Uuid
   title              String
-  description        String      @default("")
-  learningObjectives String      @default("")
-  status             StoryStatus @default(DRAFT)
-  createdById        String      @db.Uuid
+  description        String            @default("")
+  learningObjectives String            @default("")
+  status             StoryStatus       @default(DRAFT)
+  createdById        String            @db.Uuid
   publishedAt        DateTime?
   /// Alasan arsip/hapus lunak — wajib saat status → ARCHIVED (Admin).
   archivedReason     String?
   archivedAt         DateTime?
-  archivedById       String?     @db.Uuid
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
-  category           StoryCategory @relation(fields: [categoryId], references: [id])
-  createdBy          User          @relation("StoryCreator", fields: [createdById], references: [id])
-  archivedBy         User?         @relation("StoryArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
+  archivedById       String?           @db.Uuid
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  category           StoryCategory     @relation(fields: [categoryId], references: [id])
+  createdBy          User              @relation("StoryCreator", fields: [createdById], references: [id])
+  archivedBy         User?             @relation("StoryArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
   pages              StoryPage[]
   versions           StoryVersion[]
   media              MediaAsset[]
@@ -305,13 +308,13 @@ model StoryVersion {
 }
 
 model StoryPage {
-  id        String   @id @default(uuid()) @db.Uuid
-  storyId   String   @db.Uuid
+  id        String       @id @default(uuid()) @db.Uuid
+  storyId   String       @db.Uuid
   sortOrder Int
   /// Judul singkat halaman (editor / pratinjau); teks cerita tetap di bodyText.
-  title     String   @default("")
-  bodyText  String   @default("")
-  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  title     String       @default("")
+  bodyText  String       @default("")
+  story     Story        @relation(fields: [storyId], references: [id], onDelete: Cascade)
   media     MediaAsset[]
   /// Maks 1 soal MCQ per halaman (opsional).
   mcq       PageMcq?
@@ -342,7 +345,7 @@ model MediaAsset {
 
   @@index([pageId])
   @@index([storyId])
-  @@index([studentId])
+  @@index([studentId, createdAt(sort: Desc)])
   @@index([pageId, studentId])
   // Cover story-level + filter kind: storyId + kind + pageId (null = cover)
   @@index([storyId, kind, pageId])
@@ -390,14 +393,14 @@ model GuideDocument {
 
 /// Soal MCQ A–D menempel di satu halaman cerita (opsional, maks 1).
 model PageMcq {
-  id             String   @id @default(uuid()) @db.Uuid
-  pageId         String   @unique @db.Uuid
-  prompt         String   @default("")
+  id             String               @id @default(uuid()) @db.Uuid
+  pageId         String               @unique @db.Uuid
+  prompt         String               @default("")
   /// Private Storage key (cermin-media), gambar soal opsional.
   promptImageKey String?
   /// Jawaban benar: A | B | C | D
   correctKey     String
-  page           StoryPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  page           StoryPage            @relation(fields: [pageId], references: [id], onDelete: Cascade)
   choices        PageMcqChoice[]
   responses      SessionMcqResponse[]
 
@@ -414,20 +417,19 @@ model PageMcqChoice {
   mcq       PageMcq @relation(fields: [mcqId], references: [id], onDelete: Cascade)
 
   @@unique([mcqId, key])
-  @@index([mcqId])
   @@map("page_mcq_choices")
 }
 
 model LearningSession {
-  id           String    @id @default(uuid()) @db.Uuid
-  studentId    String    @db.Uuid
-  storyId      String    @db.Uuid
-  ledByUserId  String    @db.Uuid
-  startedAt    DateTime  @default(now())
+  id           String               @id @default(uuid()) @db.Uuid
+  studentId    String               @db.Uuid
+  storyId      String               @db.Uuid
+  ledByUserId  String               @db.Uuid
+  startedAt    DateTime             @default(now())
   endedAt      DateTime?
-  student      Student   @relation(fields: [studentId], references: [id])
-  story        Story     @relation(fields: [storyId], references: [id])
-  ledBy        User      @relation(fields: [ledByUserId], references: [id])
+  student      Student              @relation(fields: [studentId], references: [id])
+  story        Story                @relation(fields: [storyId], references: [id])
+  ledBy        User                 @relation(fields: [ledByUserId], references: [id])
   observations SessionObservation[]
   mcqResponses SessionMcqResponse[]
 
@@ -435,6 +437,7 @@ model LearningSession {
   @@index([studentId, startedAt(sort: Desc)])
   @@index([ledByUserId, startedAt(sort: Desc)])
   @@index([storyId])
+  @@index([startedAt(sort: Desc)])
   @@index([endedAt, startedAt(sort: Desc)])
   @@map("learning_sessions")
 }
@@ -462,7 +465,6 @@ model SessionMcqResponse {
   mcq         PageMcq         @relation(fields: [pageMcqId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, pageMcqId])
-  @@index([sessionId])
   @@index([pageMcqId])
   @@map("session_mcq_responses")
 }
@@ -478,26 +480,28 @@ model AuditLog {
   actor      User?    @relation(fields: [actorId], references: [id])
 
   @@index([createdAt(sort: Desc)])
+  @@index([actorId])
+  @@index([action, createdAt(sort: Desc)])
   @@index([entityType, entityId])
   @@map("audit_logs")
 }
 
 /// Branding lembaga (singleton id = default). Logo di bucket privat cermin-media.
 model InstitutionBranding {
-  id          String   @id @db.VarChar(32)
+  id           String   @id @db.VarChar(32)
   /// Storage key privat (bukan URL publik).
-  logoKey     String?
-  logoMime    String?
+  logoKey      String?
+  logoMime     String?
   /// Nama lembaga untuk footer / chrome publik.
-  name        String?  @db.VarChar(200)
-  address     String?  @db.Text
-  websiteUrl  String?  @db.VarChar(500)
-  instagramUrl String? @db.VarChar(500)
-  facebookUrl String?  @db.VarChar(500)
-  youtubeUrl  String?  @db.VarChar(500)
-  whatsappUrl String?  @db.VarChar(500)
-  updatedAt   DateTime @updatedAt
-  updatedById String?  @db.Uuid
+  name         String?  @db.VarChar(200)
+  address      String?  @db.Text
+  websiteUrl   String?  @db.VarChar(500)
+  instagramUrl String?  @db.VarChar(500)
+  facebookUrl  String?  @db.VarChar(500)
+  youtubeUrl   String?  @db.VarChar(500)
+  whatsappUrl  String?  @db.VarChar(500)
+  updatedAt    DateTime @updatedAt
+  updatedById  String?  @db.Uuid
 
   @@map("institution_branding")
 }

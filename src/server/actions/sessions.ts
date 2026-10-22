@@ -597,10 +597,11 @@ export async function getSessionForReader(
       // Metadata portrait murid lain (tanpa storageKey) — ganti nama lokal.
       prisma.mediaAsset.findMany({
         where: {
+          storyId: sessionBase.storyId,
+          pageId: { not: null },
           kind: MediaKind.IMAGE,
           studentId: { not: null },
           NOT: { studentId },
-          page: { storyId: sessionBase.storyId },
         },
         select: {
           id: true,

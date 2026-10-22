@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   AuthzError,
-  assertCanAccessGuide,
+  loadGuideForDownload,
   requireSession,
 } from "@/server/policies/access";
 import { guideIdSchema } from "@/server/validations/help";
@@ -33,15 +32,7 @@ export async function GET(
     }
     const { id } = parsed.data;
 
-    await assertCanAccessGuide(user, id);
-
-    const guide = await prisma.guideDocument.findUnique({ where: { id } });
-    if (!guide) {
-      return NextResponse.json(
-        { error: "Petunjuk tidak ditemukan" },
-        { status: 404 },
-      );
-    }
+    const guide = await loadGuideForDownload(user, id);
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage

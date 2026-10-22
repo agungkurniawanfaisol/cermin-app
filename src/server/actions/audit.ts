@@ -85,27 +85,30 @@ export async function listAuditLogsForAdmin(
   const where: Prisma.AuditLogWhereInput =
     and.length > 0 ? { AND: and } : {};
 
-  const total = await prisma.auditLog.count({ where });
+  // Count + page in parallel (eliminate waterfall round-trips).
+  const skip = (Math.max(parsed.page, 1) - 1) * parsed.pageSize;
+  const [total, rows] = await Promise.all([
+    prisma.auditLog.count({ where }),
+    prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: parsed.order },
+      skip,
+      take: parsed.pageSize,
+      select: {
+        id: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        metadata: true,
+        createdAt: true,
+        actor: { select: { id: true, name: true, email: true } },
+      },
+    }),
+  ]);
   const meta = paginationMeta({
     page: parsed.page,
     pageSize: parsed.pageSize,
     total,
-  });
-
-  const rows = await prisma.auditLog.findMany({
-    where,
-    orderBy: { createdAt: parsed.order },
-    skip: meta.skip,
-    take: meta.take,
-    select: {
-      id: true,
-      action: true,
-      entityType: true,
-      entityId: true,
-      metadata: true,
-      createdAt: true,
-      actor: { select: { id: true, name: true, email: true } },
-    },
   });
 
   const items: ListedAuditLog[] = rows.map((row) => {

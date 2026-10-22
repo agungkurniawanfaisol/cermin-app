@@ -195,6 +195,28 @@ export async function assertCanAccessGuide(
   if (!canAccessGuideDocument(user, guide)) throw new AuthzError();
 }
 
+export async function loadGuideForDownload(
+  user: PolicyUser,
+  guideId: string,
+): Promise<{ id: string; storageBucket: string; storageKey: string }> {
+  const guide = await prisma.guideDocument.findUnique({
+    where: { id: guideId },
+    select: {
+      id: true,
+      isPublished: true,
+      storageBucket: true,
+      storageKey: true,
+    },
+  });
+  if (!guide) throw new AuthzError("Petunjuk tidak ditemukan", 404);
+  if (!canAccessGuideDocument(user, guide)) throw new AuthzError();
+  return {
+    id: guide.id,
+    storageBucket: guide.storageBucket,
+    storageKey: guide.storageKey,
+  };
+}
+
 /** Deduped per RSC request — keyed by id/role/status (bukan object identity). */
 const userHasAnyStudentAccessCached = cache(
   async (

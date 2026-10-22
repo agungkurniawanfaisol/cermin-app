@@ -404,51 +404,51 @@ export async function getStoryEditorShell(
     );
   }
 
-  const story = await prisma.story.findUnique({
-    where: { id: parsed.data.storyId },
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      learningObjectives: true,
-      categoryId: true,
-      status: true,
-      createdById: true,
-      updatedAt: true,
-      archivedReason: true,
-      category: { select: { id: true, name: true } },
-      createdBy: { select: { id: true, name: true, email: true } },
-      media: {
-        where: storyCoverMediaWhere,
-        orderBy: { sortOrder: "desc" },
-        take: 1,
-        select: { id: true },
+  const validStoryId = parsed.data.storyId;
+  const [story, pagesWithTextRows, pagesWithMedia] = await Promise.all([
+    prisma.story.findUnique({
+      where: { id: validStoryId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        learningObjectives: true,
+        categoryId: true,
+        status: true,
+        createdById: true,
+        updatedAt: true,
+        archivedReason: true,
+        category: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        media: {
+          where: storyCoverMediaWhere,
+          orderBy: { sortOrder: "desc" },
+          take: 1,
+          select: { id: true },
+        },
+        _count: { select: { pages: true } },
       },
-      _count: { select: { pages: true } },
-    },
-  });
+    }),
+    prisma.$queryRaw<Array<{ c: bigint }>>`
+      SELECT COUNT(*)::bigint AS c
+      FROM "story_pages"
+      WHERE "storyId" = ${validStoryId}
+        AND length(trim("bodyText")) > 0
+    `,
+    prisma.storyPage.count({
+      where: {
+        storyId: validStoryId,
+        media: { some: {} },
+      },
+    }),
+  ]);
 
   if (!story) throw new AuthzError("Cerita tidak ditemukan", 404);
   if (user.role === "ORANG_TUA" && story.status !== StoryStatus.PUBLISHED) {
     throw new AuthzError();
   }
 
-  const [pagesWithTextRows, pagesWithMedia] = await Promise.all([
-    prisma.$queryRaw<Array<{ c: bigint }>>`
-      SELECT COUNT(*)::bigint AS c
-      FROM "story_pages"
-      WHERE "storyId" = ${story.id}
-        AND length(trim("bodyText")) > 0
-    `,
-    prisma.storyPage.count({
-      where: {
-        storyId: story.id,
-        media: { some: {} },
-      },
-    }),
-  ]);
   const pagesWithText = Number(pagesWithTextRows[0]?.c ?? 0);
-
   return {
     id: story.id,
     title: story.title,

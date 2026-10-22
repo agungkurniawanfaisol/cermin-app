@@ -215,18 +215,53 @@ export async function getStudentDetail(
     await assertCanAccessStudent(user, studentId);
   }
 
+  const isAdmin = user.role === "ADMIN";
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    include: {
+    select: {
+      id: true,
+      displayName: true,
+      fullName: true,
+      dateOfBirth: true,
+      homeAddress: true,
+      rt: true,
+      rw: true,
+      phone: true,
+      emergencyContactName: true,
+      emergencyContactPhone: true,
+      homeLanguage: true,
+      preferQuiet: true,
+      preferDimLight: true,
+      sensoryNotes: true,
+      requirePhotoForSession: true,
+      imageKey: true,
+      fatherImageKey: true,
+      motherImageKey: true,
+      status: true,
+      archivedReason: true,
+      archivedAt: true,
+      archivedById: true,
+      createdAt: true,
+      updatedAt: true,
+      adminNotes: isAdmin,
+      allergies: isAdmin,
       therapistAssignments: {
-        include: {
+        select: {
+          id: true,
+          therapistId: true,
+          startedAt: true,
+          endedAt: true,
           therapist: { select: { id: true, name: true, email: true } },
           assignedBy: { select: { id: true, name: true } },
         },
         orderBy: { startedAt: "desc" },
       },
       parentLinks: {
-        include: {
+        select: {
+          id: true,
+          parentId: true,
+          relationLabel: true,
+          isActive: true,
           parent: { select: { id: true, name: true, email: true } },
         },
         orderBy: { parent: { name: "asc" } },
@@ -236,14 +271,8 @@ export async function getStudentDetail(
 
   if (!student) throw new AuthzError("Murid tidak ditemukan", 404);
 
-  if (user.role === "ADMIN") return student;
-
-  const { adminNotes, allergies, ...safe } = student;
-  void adminNotes;
-  void allergies;
-  return safe;
+  return student as unknown as StudentDetail;
 }
-
 export async function createStudent(
   input: CreateStudentInput,
 ): Promise<ActionResult<{ id: string }>> {

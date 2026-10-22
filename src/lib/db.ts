@@ -6,7 +6,7 @@ import { Pool } from "pg";
  * Bump when Prisma schema fields change so dev HMR drops a stale client
  * (otherwise Turbopack keeps an old PrismaClient and throws Unknown field).
  */
-const PRISMA_SCHEMA_REV = "student-archive-reason-v5";
+const PRISMA_SCHEMA_REV = "perf-indexes-v6";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

@@ -77,14 +77,41 @@ async function CeritaDetailContent({
   const canManage = user.role === "ADMIN" || user.role === "TERAPIS";
 
   let shell: Awaited<ReturnType<typeof getStoryEditorShell>>;
+  let categories: Awaited<ReturnType<typeof listActiveCategories>> = [];
+  let students: Awaited<ReturnType<typeof listActiveStudentsForSession>> = [];
+  let detail: Awaited<ReturnType<typeof getStoryDetail>> | null = null;
+  let versions: Awaited<ReturnType<typeof listStoryVersions>> = [];
+
   try {
-    shell = await getStoryEditorShell(id);
+    const [
+      shellResult,
+      categoryResult,
+      studentResult,
+      detailResult,
+      versionResult,
+    ] = await Promise.all([
+      getStoryEditorShell(id),
+      canManage ? listActiveCategories() : Promise.resolve(null),
+      canManage ? listActiveStudentsForSession() : Promise.resolve(null),
+      getStoryDetail(id),
+      canManage ? listStoryVersions(id) : Promise.resolve([]),
+    ]);
+    shell = shellResult;
+    categories =
+      categoryResult ?? [{ id: shell.categoryId, name: shell.category.name }];
+    if (studentResult) students = studentResult;
+    detail = detailResult;
+    versions = versionResult;
   } catch (error) {
     if (error instanceof AuthzError) {
       if (error.status === 404) notFound();
       redirect("/dashboard/cerita");
     }
     throw error;
+  }
+
+  if (!detail) {
+    notFound();
   }
 
   const editable = canEditContent(user, shell);
@@ -134,38 +161,6 @@ async function CeritaDetailContent({
   ];
 
   const active = resolveActiveTab(initialTab, steps);
-
-  // Muat payload editor sekali — ganti tab di klien tanpa RSC refetch.
-  let categories: Awaited<ReturnType<typeof listActiveCategories>> = [
-    { id: shell.categoryId, name: shell.category.name },
-  ];
-  let students: Awaited<ReturnType<typeof listActiveStudentsForSession>> = [];
-  let detail: Awaited<ReturnType<typeof getStoryDetail>> | null = null;
-  let versions: Awaited<ReturnType<typeof listStoryVersions>> = [];
-
-  try {
-    const [categoryResult, studentResult, detailResult, versionResult] =
-      await Promise.all([
-        canManage ? listActiveCategories() : Promise.resolve(null),
-        canManage ? listActiveStudentsForSession() : Promise.resolve(null),
-        getStoryDetail(id),
-        canManage ? listStoryVersions(id) : Promise.resolve([]),
-      ]);
-    if (categoryResult) categories = categoryResult;
-    if (studentResult) students = studentResult;
-    detail = detailResult;
-    versions = versionResult;
-  } catch (error) {
-    if (error instanceof AuthzError) {
-      if (error.status === 404) notFound();
-      redirect("/dashboard/cerita");
-    }
-    throw error;
-  }
-
-  if (!detail) {
-    notFound();
-  }
 
   const pages = detail.pages.map((p) => ({
     id: p.id,
