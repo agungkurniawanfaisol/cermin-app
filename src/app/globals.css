@@ -318,98 +318,39 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* Satu scroll dokumen (window) — tidak ada scroll bersarang di buku. */
 .belajar-stage {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
-  height: 100svh;
-  max-height: 100dvh;
-  max-height: 100svh;
-}
-
-/* Chrome/header: sembunyikan scrollbar. Halaman cerita: scrollbar tipis (lihat .belajar-book__page). */
-.belajar-root,
-.belajar-stage,
-.belajar-book {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.belajar-root::-webkit-scrollbar,
-.belajar-stage::-webkit-scrollbar,
-.belajar-book::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
-
-.belajar-stage__scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-}
-
-/* Buku: geser horizontal antar halaman; vertikal di dalam .belajar-book__page */
-.belajar-book {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
   width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  /* pan-y diizinkan agar scroll konten halaman tidak terkunci */
-  touch-action: pan-x pan-y;
-  cursor: grab;
-  user-select: none;
+  min-height: 0;
 }
 
-.belajar-book:active {
-  cursor: grabbing;
+.belajar-stage__header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background-color: color-mix(in srgb, var(--belajar-ground) 92%, white);
+  border-bottom: 1px solid var(--belajar-line);
+  backdrop-filter: blur(4px);
+}
+
+/* Satu halaman aktif — tinggi mengikuti konten */
+.belajar-book {
+  display: block;
+  width: 100%;
+  overflow: visible;
 }
 
 .belajar-book__page {
   box-sizing: border-box;
-  flex: 0 0 100%;
+  display: block;
   width: 100%;
   max-width: 100%;
-  height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  padding: 0 1rem 1.25rem;
+  height: auto;
+  overflow: visible;
+  padding: 0.5rem 1rem 1rem;
   user-select: text;
-  /* Scrollbar tipis — isyarat ada konten di bawah (soal / suara) */
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--belajar-line) 80%, transparent)
-    transparent;
-}
-
-.belajar-book__page::-webkit-scrollbar {
-  width: 6px;
-  height: 0;
-  display: block;
-}
-
-.belajar-book__page::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.belajar-book__page::-webkit-scrollbar-thumb {
-  background-color: color-mix(in srgb, var(--belajar-line) 85%, var(--belajar-quiet));
-  border-radius: 999px;
 }
 
 @media (min-width: 640px) {
@@ -426,21 +367,27 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .belajar-book,
-  .belajar-book__page,
-  .belajar-stage__scroll {
-    scroll-behavior: auto;
-  }
+/* Navigasi tetap di bawah viewport; konten punya padding bawah (lihat session-reader). */
+.belajar-nav-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  background-color: color-mix(in srgb, var(--belajar-page) 92%, var(--belajar-ground));
+  border-top: 1px solid var(--belajar-line);
+  backdrop-filter: blur(4px);
 }
 
-.belajar-nav-sticky {
-  flex-shrink: 0;
-  z-index: 20;
+.belajar-nav-fixed {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
   padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
-  background-color: color-mix(in srgb, var(--belajar-page) 88%, var(--belajar-ground));
+  background-color: color-mix(in srgb, var(--belajar-page) 94%, var(--belajar-ground));
   border-top: 1px solid var(--belajar-line);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(4px);
 }
 
 /* Landscape pendek: padatkan chrome agar stage muat tanpa scroll dokumen */

@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   useTransition,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,9 +21,6 @@ import { EvaluationPanel } from "./evaluation-panel";
 import { ObservationPanel } from "./observation-panel";
 import { PageMcqBlock } from "./page-mcq";
 import { PageAudioDock, PageImage } from "./page-media";
-
-/** Ambang geser horizontal (px) — seperti membuka halaman buku. */
-const SWIPE_THRESHOLD_PX = 56;
 
 const TEXT_SIZE_CLASS: Record<
   SessionForReader["preference"]["textSize"],
@@ -68,9 +64,8 @@ function StoryPageSlide({
 
   return (
     <article className="belajar-book__page" aria-label="Halaman cerita">
-      {/* Konten lebih tinggi dari area buku → scroll vertikal di .belajar-book__page */}
-      <div className="flex min-h-full flex-col gap-3 px-3 pb-8 pt-1 sm:gap-4 sm:px-5 sm:pb-10 md:px-8 lg:px-10">
-        <div className="grid shrink-0 gap-3 md:grid-cols-2 md:items-start md:gap-5">
+      <div className="flex flex-col gap-3 px-3 pb-4 pt-2 sm:gap-4 sm:px-5 sm:pb-6 md:px-8 lg:px-10 [padding-bottom:calc(5.5rem+env(safe-area-inset-bottom,0px))]">
+        <div className="grid gap-3 md:grid-cols-2 md:items-start md:gap-5">
           <div className="belajar-portrait p-2 sm:p-3">
             {portrait ? (
               <PageImage
@@ -100,7 +95,7 @@ function StoryPageSlide({
         </div>
 
         {page.mcq ? (
-          <div className="w-full shrink-0 grow-0">
+          <div className="w-full">
             <PageMcqBlock
               sessionId={sessionId}
               studentId={studentId}
@@ -111,7 +106,7 @@ function StoryPageSlide({
         ) : null}
 
         {page.storyImages.length > 0 ? (
-          <div className="belajar-page-card w-full shrink-0 space-y-3 p-3 sm:p-4">
+          <div className="belajar-page-card w-full space-y-3 p-3 sm:p-4">
             {page.storyImages.map((image) => (
               <PageImage key={image.id} image={image} variant="story" />
             ))}
@@ -119,7 +114,7 @@ function StoryPageSlide({
         ) : null}
 
         {audios.length > 0 ? (
-          <div className="flex w-full shrink-0 justify-center pt-1">
+          <div className="flex w-full justify-center pt-1">
             <PageAudioDock audios={audios} />
           </div>
         ) : null}
@@ -130,11 +125,7 @@ function StoryPageSlide({
 
 export function SessionReader({ session }: { session: SessionForReader }) {
   const router = useRouter();
-  const bookRef = useRef<HTMLDivElement>(null);
   const pageIndexRef = useRef(0);
-  const swipeOrigin = useRef<{ x: number; y: number; id: number } | null>(
-    null,
-  );
   const [pageIndex, setPageIndex] = useState(0);
   const [readingDone, setReadingDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +142,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
 
   const pages = session.pages;
   const total = pages.length;
+  const currentPage = pages[pageIndex] ?? null;
   const bodyClass = TEXT_SIZE_CLASS[session.preference.textSize];
   const showAudio = session.preference.audioEnabled;
   const progressPct = total > 0 ? ((pageIndex + 1) / total) * 100 : 0;
@@ -163,56 +155,25 @@ export function SessionReader({ session }: { session: SessionForReader }) {
     pageIndexRef.current = pageIndex;
   }, [pageIndex]);
 
-  const scrollToPage = useCallback(
+  /** Satu halaman aktif + satu scroll window — tanpa carousel bersarang. */
+  const goToPage = useCallback(
     (index: number) => {
-      const el = bookRef.current;
-      if (!el) return;
       const next = Math.max(0, Math.min(total - 1, index));
-      const behavior = prefersReducedMotion() ? "auto" : "smooth";
-      el.scrollTo({ left: el.clientWidth * next, behavior });
       setPageIndex(next);
+      const behavior = prefersReducedMotion() ? "auto" : "smooth";
+      window.scrollTo({ top: 0, behavior });
     },
     [total],
   );
 
   const goPrev = useCallback(() => {
-    scrollToPage(pageIndexRef.current - 1);
-  }, [scrollToPage]);
+    goToPage(pageIndexRef.current - 1);
+  }, [goToPage]);
 
   const goNext = useCallback(() => {
     if (pageIndexRef.current >= total - 1) return;
-    scrollToPage(pageIndexRef.current + 1);
-  }, [scrollToPage, total]);
-
-  function onBookPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    // Abaikan kontrol interaktif + area soal (scroll/tap jawaban).
-    const target = e.target as HTMLElement | null;
-    if (
-      target?.closest(
-        "button, a, select, input, textarea, audio, label, [aria-label='Soal pilihan']",
-      )
-    ) {
-      return;
-    }
-    swipeOrigin.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
-  }
-
-  function onBookPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
-    const origin = swipeOrigin.current;
-    if (!origin || origin.id !== e.pointerId) return;
-    swipeOrigin.current = null;
-    const dx = e.clientX - origin.x;
-    const dy = e.clientY - origin.y;
-    if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
-    if (Math.abs(dx) < Math.abs(dy)) return; // scroll vertikal halaman
-    if (dx < 0) goNext();
-    else goPrev();
-  }
-
-  function onBookPointerCancel() {
-    swipeOrigin.current = null;
-  }
+    goToPage(pageIndexRef.current + 1);
+  }, [goToPage, total]);
 
   function onFinishStory() {
     setReadingDone(true);
@@ -223,41 +184,6 @@ export function SessionReader({ session }: { session: SessionForReader }) {
       });
     });
   }
-
-  useEffect(() => {
-    const el = bookRef.current;
-    if (!el || total === 0) return;
-
-    let ticking = false;
-    function onScroll() {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        const book = bookRef.current;
-        if (!book) {
-          ticking = false;
-          return;
-        }
-        const width = book.clientWidth || 1;
-        const i = Math.round(book.scrollLeft / width);
-        setPageIndex(Math.max(0, Math.min(total - 1, i)));
-        ticking = false;
-      });
-    }
-
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [total]);
-
-  useEffect(() => {
-    function onResize() {
-      const el = bookRef.current;
-      if (!el) return;
-      el.scrollTo({ left: el.clientWidth * pageIndex, behavior: "auto" });
-    }
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [pageIndex]);
 
   function onChangeStudent(nextStudentId: string) {
     if (nextStudentId === studentId || ended) return;
@@ -369,31 +295,22 @@ export function SessionReader({ session }: { session: SessionForReader }) {
           </div>
         </header>
 
-        <div
-          ref={bookRef}
-          className="belajar-book"
-          role="region"
-          aria-roledescription="carousel"
-          aria-label="Halaman cerita — geser ke samping"
-          onPointerDown={onBookPointerDown}
-          onPointerUp={onBookPointerUp}
-          onPointerCancel={onBookPointerCancel}
-        >
-          {pages.map((page) => (
+        <div className="belajar-book" role="region" aria-label="Halaman cerita">
+          {currentPage ? (
             <StoryPageSlide
-              key={page.id}
-              page={page}
+              key={currentPage.id}
+              page={currentPage}
               sessionId={session.id}
               studentId={studentId}
               bodyClass={bodyClass}
               showAudio={showAudio}
               sessionEnded={ended}
             />
-          ))}
+          ) : null}
         </div>
 
-        <nav className="belajar-nav-sticky w-full" aria-label="Navigasi halaman">
-          <div className="flex flex-row items-center justify-center gap-2 px-4 sm:gap-3 sm:px-6 md:px-8 lg:px-10">
+        <nav className="belajar-nav-fixed w-full" aria-label="Navigasi halaman">
+          <div className="mx-auto flex max-w-3xl flex-row items-center justify-center gap-2 px-4 sm:gap-3 sm:px-6">
             <button
               type="button"
               onClick={goPrev}
@@ -427,7 +344,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
 
       <div
         ref={adultRef}
-        className="belajar-adult w-full px-4 py-8 sm:px-6 md:px-8 lg:px-10"
+        className="belajar-adult w-full px-4 py-8 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:px-6 md:px-8 lg:px-10"
       >
         {readingDone ? (
           <div
