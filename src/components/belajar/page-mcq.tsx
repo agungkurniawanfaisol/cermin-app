@@ -5,14 +5,13 @@ import { upsertSessionMcqResponse } from "@/server/actions/evaluations";
 import type { SessionPageMcq } from "@/server/actions/sessions";
 import type { McqKey } from "@/server/validations/evaluation";
 
-/** Grid agar semua opsi muat satu layar (tanpa scroll jawaban). */
+/** Grid responsif — di mobile 1–2 kolom supaya pilihan tidak terpotong. */
 function answersGridClass(count: number): string {
   if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "grid-cols-2";
-  if (count === 3) return "grid-cols-3";
-  if (count === 4) return "grid-cols-2 sm:grid-cols-4";
-  if (count === 5) return "grid-cols-3 sm:grid-cols-5";
-  return "grid-cols-3 sm:grid-cols-6";
+  if (count === 2) return "grid-cols-1 sm:grid-cols-2";
+  if (count === 3) return "grid-cols-1 sm:grid-cols-3";
+  if (count === 4) return "grid-cols-1 sm:grid-cols-2";
+  return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
 }
 
 function answerImageMax(count: number): string {
@@ -58,10 +57,10 @@ export function PageMcqBlock({
 
   return (
     <section
-      className="belajar-page-card flex max-h-[min(72dvh,36rem)] flex-col gap-2 overflow-hidden p-2.5 sm:gap-3 sm:p-3"
+      className="belajar-page-card flex w-full flex-col gap-3 p-3 sm:gap-3.5 sm:p-4"
       aria-label="Soal pilihan"
     >
-      <p className="shrink-0 text-base font-semibold leading-snug text-[var(--belajar-ink,#1f2933)] sm:text-lg">
+      <p className="text-base font-semibold leading-snug text-[var(--belajar-ink,#1f2933)] sm:text-lg">
         {mcq.prompt}
       </p>
       {mcq.promptImageUrl ? (
@@ -69,33 +68,31 @@ export function PageMcqBlock({
         <img
           src={mcq.promptImageUrl}
           alt=""
-          className="mx-auto max-h-[min(14dvh,5.5rem)] w-auto shrink-0 object-contain"
+          className="mx-auto max-h-[min(14dvh,5.5rem)] w-auto object-contain"
         />
       ) : null}
-      <ul
-        className={`grid min-h-0 flex-1 gap-1.5 sm:gap-2 ${answersGridClass(n)}`}
-      >
+      <ul className={`grid gap-2 sm:gap-2.5 ${answersGridClass(n)}`}>
         {mcq.choices.map((choice) => {
           const isSelected = selected === choice.key;
           return (
-            <li key={choice.key} className="min-h-0 min-w-0">
+            <li key={choice.key} className="min-w-0">
               <button
                 type="button"
                 disabled={disabled || pending}
                 onClick={() => onSelect(choice.key)}
                 aria-pressed={isSelected}
-                className={`flex h-full min-h-11 w-full flex-col items-stretch justify-center gap-1 rounded-xl border-2 px-2 py-2 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-50 sm:px-2.5 ${
+                className={`flex min-h-11 w-full flex-col items-stretch justify-center gap-1 rounded-xl border-2 px-2.5 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] disabled:opacity-50 ${
                   isSelected
                     ? "border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent-soft,#e6f2ee)]"
                     : "border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] hover:border-[var(--belajar-accent,#3d7c6b)]"
                 }`}
               >
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--belajar-accent-soft,#e6f2ee)] text-sm font-semibold text-[var(--belajar-accent,#3d7c6b)] sm:size-9 sm:text-base">
+                <span className="flex items-center gap-2">
+                  <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--belajar-accent-soft,#e6f2ee)] text-base font-semibold text-[var(--belajar-accent,#3d7c6b)]">
                     {choice.key}
                   </span>
                   {choice.labelText.trim() ? (
-                    <span className="line-clamp-2 text-sm font-medium leading-snug text-[var(--belajar-ink,#1f2933)] sm:text-base">
+                    <span className="text-sm font-medium leading-snug text-[var(--belajar-ink,#1f2933)] sm:text-base">
                       {choice.labelText}
                     </span>
                   ) : null}
@@ -114,7 +111,7 @@ export function PageMcqBlock({
         })}
       </ul>
       {error ? (
-        <p className="shrink-0 text-sm text-[var(--danger,#9b2c2c)]" role="alert">
+        <p className="text-sm text-[var(--danger,#9b2c2c)]" role="alert">
           {error}
         </p>
       ) : null}

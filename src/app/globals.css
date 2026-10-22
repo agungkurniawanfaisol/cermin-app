@@ -458,7 +458,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(14rem, 48dvh, 28rem);
+  /* Jangan terlalu tinggi — sisakan ruang soal MCQ di viewport */
+  min-height: clamp(10rem, 32dvh, 18rem);
   background-color: var(--belajar-page);
   border: 2px solid var(--belajar-line);
   border-radius: 1.25rem;

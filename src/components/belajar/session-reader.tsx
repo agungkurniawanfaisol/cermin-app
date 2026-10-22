@@ -68,8 +68,9 @@ function StoryPageSlide({
 
   return (
     <article className="belajar-book__page" aria-label="Halaman cerita">
-      <div className="flex h-full min-h-0 flex-col gap-3 px-3 pb-3 pt-1 sm:gap-4 sm:px-5 md:px-8 lg:px-10">
-        <div className="grid gap-3 md:grid-cols-2 md:items-stretch md:gap-5">
+      {/* min-h-full (bukan h-full): konten boleh lebih tinggi dari viewport → scroll di dalam halaman */}
+      <div className="flex min-h-full flex-col gap-3 px-3 pb-4 pt-1 sm:gap-4 sm:px-5 md:px-8 lg:px-10">
+        <div className="grid shrink-0 gap-3 md:grid-cols-2 md:items-start md:gap-5">
           <div className="belajar-portrait p-2 sm:p-3">
             {portrait ? (
               <PageImage
@@ -98,9 +99,8 @@ function StoryPageSlide({
           </div>
         </div>
 
-        {/* Soal dulu (shrink-0) — jangan di bawah gambar/audio agar tidak terdorong keluar viewport. */}
         {page.mcq ? (
-          <div className="shrink-0">
+          <div className="w-full shrink-0 grow-0">
             <PageMcqBlock
               sessionId={sessionId}
               studentId={studentId}
@@ -111,7 +111,7 @@ function StoryPageSlide({
         ) : null}
 
         {page.storyImages.length > 0 ? (
-          <div className="belajar-page-card shrink-0 space-y-3 p-3 sm:p-4">
+          <div className="belajar-page-card w-full shrink-0 space-y-3 p-3 sm:p-4">
             {page.storyImages.map((image) => (
               <PageImage key={image.id} image={image} variant="story" />
             ))}
@@ -119,7 +119,7 @@ function StoryPageSlide({
         ) : null}
 
         {audios.length > 0 ? (
-          <div className="flex shrink-0 justify-center pt-1">
+          <div className="flex w-full shrink-0 justify-center pt-1">
             <PageAudioDock audios={audios} />
           </div>
         ) : null}
