@@ -10,15 +10,20 @@ export type PublicFaq = {
 
 /** FAQ terbit untuk landing (tanpa sesi). Cap 20 — index isPublished+sortOrder. */
 export const listPublishedFaqsPublic = cache(async (): Promise<PublicFaq[]> => {
-  return prisma.faqItem.findMany({
-    where: { isPublished: true },
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    take: 20,
-    select: {
-      id: true,
-      question: true,
-      answer: true,
-      sortOrder: true,
-    },
-  });
+  try {
+    return await prisma.faqItem.findMany({
+      where: { isPublished: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      take: 20,
+      select: {
+        id: true,
+        question: true,
+        answer: true,
+        sortOrder: true,
+      },
+    });
+  } catch {
+    // Landing tidak boleh 500 jika DB/FAQ sementara gagal.
+    return [];
+  }
 });

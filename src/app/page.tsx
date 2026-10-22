@@ -15,8 +15,9 @@ export const metadata: Metadata = {
 };
 
 async function HomeGate(): Promise<React.ReactNode> {
+  const hdrs = await headers();
   const [session, branding, faqs] = await Promise.all([
-    auth.api.getSession({ headers: await headers() }),
+    auth.api.getSession({ headers: hdrs }).catch(() => null),
     getBrandingPublic(),
     listPublishedFaqsPublic(),
   ]);
