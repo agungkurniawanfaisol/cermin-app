@@ -421,7 +421,7 @@
   border-radius: 1.25rem;
 }
 
-/* Foto murid: hero viewport pertama; teks/MCQ di bawah (scroll dokumen). */
+/* Foto murid besar (~1 layar tinggi); di md+ berbagi baris kiri–kanan dengan teks. */
 .belajar-portrait {
   display: flex;
   align-items: center;

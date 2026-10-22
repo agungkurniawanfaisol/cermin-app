@@ -36,7 +36,7 @@ export function EvaluationPanel({
   }, [open, sessionId]);
 
   return (
-    <section className="rounded-2xl border border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] p-4 sm:p-5">
+    <section className="mt-8 rounded-2xl border border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] p-4 sm:mt-10 sm:p-5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
