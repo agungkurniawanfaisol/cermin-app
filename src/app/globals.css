@@ -327,15 +327,17 @@
   max-height: 100svh;
 }
 
-/* Scrollbar tersembunyi, area tetap bisa digeser (halus). */
+/* Chrome/header: sembunyikan scrollbar. Halaman cerita: scrollbar tipis (lihat .belajar-book__page). */
 .belajar-root,
-.belajar-root * {
+.belajar-stage,
+.belajar-book {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
 .belajar-root::-webkit-scrollbar,
-.belajar-root *::-webkit-scrollbar {
+.belajar-stage::-webkit-scrollbar,
+.belajar-book::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
@@ -351,7 +353,7 @@
   overscroll-behavior-y: contain;
 }
 
-/* Buku: geser horizontal + snap; swipe juga ditangani JS di SessionReader */
+/* Buku: geser horizontal antar halaman; vertikal di dalam .belajar-book__page */
 .belajar-book {
   display: flex;
   flex: 1 1 auto;
@@ -363,8 +365,8 @@
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  /* Prioritas geser samping; scroll vertikal tetap di dalam halaman */
-  touch-action: pan-x;
+  /* pan-y diizinkan agar scroll konten halaman tidak terkunci */
+  touch-action: pan-x pan-y;
   cursor: grab;
   user-select: none;
 }
@@ -381,15 +383,33 @@
   height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   scroll-snap-align: start;
   scroll-snap-stop: always;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-  /* Izinkan scroll vertikal konten tanpa memblokir swipe horizontal di parent */
   touch-action: pan-y;
-  padding: 0 1rem 1rem;
+  padding: 0 1rem 1.25rem;
   user-select: text;
+  /* Scrollbar tipis — isyarat ada konten di bawah (soal / suara) */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--belajar-line) 80%, transparent)
+    transparent;
+}
+
+.belajar-book__page::-webkit-scrollbar {
+  width: 6px;
+  height: 0;
+  display: block;
+}
+
+.belajar-book__page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.belajar-book__page::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--belajar-line) 85%, var(--belajar-quiet));
+  border-radius: 999px;
 }
 
 @media (min-width: 640px) {
@@ -458,11 +478,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Jangan terlalu tinggi — sisakan ruang soal MCQ di viewport */
-  min-height: clamp(10rem, 32dvh, 18rem);
+  min-height: clamp(8rem, 28dvh, 14rem);
+  max-height: min(36dvh, 16rem);
   background-color: var(--belajar-page);
   border: 2px solid var(--belajar-line);
   border-radius: 1.25rem;
+  overflow: hidden;
 }
 
 .belajar-progress-track {

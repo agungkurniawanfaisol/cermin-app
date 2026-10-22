@@ -68,8 +68,8 @@ function StoryPageSlide({
 
   return (
     <article className="belajar-book__page" aria-label="Halaman cerita">
-      {/* min-h-full (bukan h-full): konten boleh lebih tinggi dari viewport → scroll di dalam halaman */}
-      <div className="flex min-h-full flex-col gap-3 px-3 pb-4 pt-1 sm:gap-4 sm:px-5 md:px-8 lg:px-10">
+      {/* Konten lebih tinggi dari area buku → scroll vertikal di .belajar-book__page */}
+      <div className="flex min-h-full flex-col gap-3 px-3 pb-8 pt-1 sm:gap-4 sm:px-5 sm:pb-10 md:px-8 lg:px-10">
         <div className="grid shrink-0 gap-3 md:grid-cols-2 md:items-start md:gap-5">
           <div className="belajar-portrait p-2 sm:p-3">
             {portrait ? (
@@ -186,9 +186,13 @@ export function SessionReader({ session }: { session: SessionForReader }) {
 
   function onBookPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    // Abaikan kontrol interaktif (select, audio, link).
+    // Abaikan kontrol interaktif + area soal (scroll/tap jawaban).
     const target = e.target as HTMLElement | null;
-    if (target?.closest("button, a, select, input, textarea, audio, label")) {
+    if (
+      target?.closest(
+        "button, a, select, input, textarea, audio, label, [aria-label='Soal pilihan']",
+      )
+    ) {
       return;
     }
     swipeOrigin.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
