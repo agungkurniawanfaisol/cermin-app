@@ -169,30 +169,28 @@ export function StoryPreviewPanel({ title, pages, students }: Props) {
         <div className="belajar-book">
           <article className="belajar-book__page" aria-label="Halaman cerita">
             <div className="flex flex-col gap-4 px-4 pb-4 sm:px-6">
-              <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-6">
-                <div className="belajar-portrait p-3 sm:p-4">
-                  {media.portraitImage ? (
-                    <PageImage
-                      key={`${media.portraitImage.id}-${studentId}`}
-                      image={media.portraitImage}
-                      variant="portrait"
-                    />
-                  ) : (
-                    <p
-                      className="max-w-xs text-center text-base text-[#5c6b73]"
-                      role="status"
-                    >
-                      Belum ada foto murid untuk halaman ini.
-                    </p>
-                  )}
-                </div>
-                <div className="belajar-page-card flex flex-col justify-center p-4 sm:p-5">
-                  <p className="whitespace-pre-wrap text-2xl leading-relaxed text-[#1f2933] sm:text-3xl">
-                    {page.bodyText?.trim()
-                      ? page.bodyText
-                      : "Halaman ini belum ada teks."}
+              <div className="belajar-portrait p-3 sm:p-4">
+                {media.portraitImage ? (
+                  <PageImage
+                    key={`${media.portraitImage.id}-${studentId}`}
+                    image={media.portraitImage}
+                    variant="portrait"
+                  />
+                ) : (
+                  <p
+                    className="max-w-xs text-center text-base text-[#5c6b73]"
+                    role="status"
+                  >
+                    Belum ada foto murid untuk halaman ini.
                   </p>
-                </div>
+                )}
+              </div>
+              <div className="belajar-page-card flex flex-col justify-center p-4 sm:p-5">
+                <p className="whitespace-pre-wrap text-2xl leading-relaxed text-[#1f2933] sm:text-3xl">
+                  {page.bodyText?.trim()
+                    ? page.bodyText
+                    : "Halaman ini belum ada teks."}
+                </p>
               </div>
               {media.storyImages.length > 0 ? (
                 <div className="belajar-page-card space-y-4 p-4 sm:p-5">

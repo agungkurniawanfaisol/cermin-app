@@ -65,33 +65,31 @@ function StoryPageSlide({
   return (
     <article className="belajar-book__page" aria-label="Halaman cerita">
       <div className="flex flex-col gap-3 px-3 pb-4 pt-2 sm:gap-4 sm:px-5 sm:pb-6 md:px-8 lg:px-10 [padding-bottom:calc(5.5rem+env(safe-area-inset-bottom,0px))]">
-        <div className="grid gap-3 md:grid-cols-2 md:items-start md:gap-5">
-          <div className="belajar-portrait p-2 sm:p-3">
-            {portrait ? (
-              <PageImage
-                key={`${portrait.id}-${studentId}`}
-                image={portrait}
-                variant="portrait"
-              />
-            ) : (
-              <p
-                className="max-w-xs text-center text-base text-[var(--belajar-quiet,#5c6b73)]"
-                role="status"
-              >
-                Belum ada foto murid untuk halaman ini.
-              </p>
-            )}
-          </div>
-
-          <div className="belajar-page-card flex flex-col justify-center gap-3 p-4 sm:p-5 md:p-6">
+        <div className="belajar-portrait p-2 sm:p-3 md:p-4">
+          {portrait ? (
+            <PageImage
+              key={`${portrait.id}-${studentId}`}
+              image={portrait}
+              variant="portrait"
+            />
+          ) : (
             <p
-              className={`whitespace-pre-wrap text-[var(--belajar-ink,#1f2933)] ${bodyClass}`}
+              className="max-w-xs text-center text-base text-[var(--belajar-quiet,#5c6b73)]"
+              role="status"
             >
-              {page.bodyText?.trim()
-                ? page.bodyText
-                : "Halaman ini belum ada teks."}
+              Belum ada foto murid untuk halaman ini.
             </p>
-          </div>
+          )}
+        </div>
+
+        <div className="belajar-page-card flex flex-col justify-center gap-3 p-4 sm:p-5 md:p-6">
+          <p
+            className={`whitespace-pre-wrap text-[var(--belajar-ink,#1f2933)] ${bodyClass}`}
+          >
+            {page.bodyText?.trim()
+              ? page.bodyText
+              : "Halaman ini belum ada teks."}
+          </p>
         </div>
 
         {page.mcq ? (

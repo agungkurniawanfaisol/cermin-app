@@ -20,11 +20,11 @@ async function fetchMediaUrl(mediaId: string): Promise<string> {
 type ImageVariant = "portrait" | "story";
 
 const IMAGE_SIZE: Record<ImageVariant, string> = {
-  /* Ringkas agar soal + suara muat; sisa konten di-scroll di dalam halaman */
+  /* Portrait isi hampir 1 layar; teks/MCQ di bawah (scroll dokumen). */
   portrait:
-    "mx-auto max-h-[min(34dvh,14rem)] w-full object-contain sm:max-h-[min(36dvh,15rem)]",
+    "mx-auto h-auto max-h-[min(68dvh,34rem)] w-full object-contain sm:max-h-[min(72dvh,36rem)]",
   story:
-    "mx-auto max-h-[min(36dvh,15rem)] w-full object-contain sm:max-h-[min(40dvh,17rem)]",
+    "mx-auto max-h-[min(40dvh,18rem)] w-full object-contain sm:max-h-[min(48dvh,22rem)]",
 };
 
 export function PageImage({

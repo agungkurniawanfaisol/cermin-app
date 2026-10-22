@@ -421,16 +421,24 @@
   border-radius: 1.25rem;
 }
 
+/* Foto murid: hero viewport pertama; teks/MCQ di bawah (scroll dokumen). */
 .belajar-portrait {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: clamp(8rem, 28dvh, 14rem);
-  max-height: min(36dvh, 16rem);
+  width: 100%;
+  min-height: min(72dvh, 36rem);
+  max-height: none;
   background-color: var(--belajar-page);
   border: 2px solid var(--belajar-line);
   border-radius: 1.25rem;
   overflow: hidden;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .belajar-portrait {
+    min-height: min(58dvh, 18rem);
+  }
 }
 
 .belajar-progress-track {
