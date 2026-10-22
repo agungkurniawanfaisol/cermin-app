@@ -330,7 +330,7 @@ export async function uploadPageMcqImage(formData: FormData): Promise<
 
 export async function upsertSessionMcqResponse(
   input: UpsertSessionMcqResponseInput,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; isCorrect: boolean }>> {
   try {
     const parsed = upsertSessionMcqResponseSchema.safeParse(input);
     if (!parsed.success) {
@@ -369,6 +369,7 @@ export async function upsertSessionMcqResponse(
       },
       select: {
         id: true,
+        correctKey: true,
         choices: { select: { key: true } },
       },
     });
@@ -376,6 +377,8 @@ export async function upsertSessionMcqResponse(
     if (!mcq.choices.some((c) => c.key === selectedKey)) {
       return { ok: false, error: "Pilihan tidak valid untuk soal ini" };
     }
+
+    const isCorrect = selectedKey === mcq.correctKey;
 
     const row = await prisma.sessionMcqResponse.upsert({
       where: {
@@ -391,11 +394,11 @@ export async function upsertSessionMcqResponse(
       action: "session.mcq.response",
       entityType: "SessionMcqResponse",
       entityId: row.id,
-      metadata: { sessionId, pageMcqId, selectedKey },
+      metadata: { sessionId, pageMcqId, selectedKey, isCorrect },
     });
 
-    revalidatePath(`/belajar/${sessionId}`);
-    return { ok: true, data: { id: row.id } };
+    // Jangan revalidate /belajar di sini — agar popup umpan balik di klien tidak hilang.
+    return { ok: true, data: { id: row.id, isCorrect } };
   } catch (error) {
     return {
       ok: false,
