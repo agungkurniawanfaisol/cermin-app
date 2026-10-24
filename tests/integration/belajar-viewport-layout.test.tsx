@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionReader } from "@/components/belajar/session-reader";
 import type { SessionForReader } from "@/server/actions/sessions";
@@ -131,14 +131,20 @@ describe("Belajar Landscape & Full-Screen Snap Viewport Layout", () => {
     const prevButton = screen.getByRole("button", { name: /Sebelumnya/i });
     expect(prevButton).toBeDisabled();
 
-    const nextButton = screen.getByRole("button", { name: /Berikutnya/i });
+    const nextButton = within(nav).getByRole("button", { name: /Berikutnya/i });
     expect(nextButton).toBeEnabled();
 
-    // MCQ clue in nav bar
-    const mcqClue = screen.getByRole("button", { name: /↓ Soal pilihan/i });
-    expect(mcqClue).toBeInTheDocument();
-  });
+    // MCQ clue in nav bar and prompt card in stage
+    const mcqNavClue = within(nav).getByRole("button", { name: /Klik ke bawah/i });
+    expect(mcqNavClue).toBeInTheDocument();
 
+    expect(
+      screen.getByText(/Ada pertanyaan untukmu di bawah!/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Klik ke Bawah untuk Menjawab/i }),
+    ).toBeInTheDocument();
+  });
   it("renders Screen 2 (MCQ) as a full-screen snap page when mcq exists", () => {
     render(<SessionReader session={mockSession} />);
 
@@ -178,7 +184,7 @@ describe("Belajar Landscape & Full-Screen Snap Viewport Layout", () => {
   it("navigates between pages, resets scroll to top, and hides Screen 2 when page has no MCQ", () => {
     render(<SessionReader session={mockSession} />);
 
-    const nextButton = screen.getByRole("button", { name: /Berikutnya/i });
+    const nextButton = screen.getAllByRole("button", { name: /Berikutnya/i })[0];
     fireEvent.click(nextButton);
 
     // Page 2 text is displayed

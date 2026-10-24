@@ -9,7 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import {
   endLearningSession,
   updateSessionStudent,
@@ -48,10 +48,12 @@ function StoryPageSlide({
   page,
   studentId,
   bodyClass,
+  onScrollToMcq,
 }: {
   page: SessionReaderPage;
   studentId: string;
   bodyClass: string;
+  onScrollToMcq?: () => void;
 }) {
   const portrait = resolvePortrait(page, studentId);
 
@@ -87,6 +89,25 @@ function StoryPageSlide({
             {page.storyImages.map((image) => (
               <PageImage key={image.id} image={image} variant="story" />
             ))}
+          </div>
+        ) : null}
+
+        {page.mcq && onScrollToMcq ? (
+          <div className="mt-3 sm:mt-4 flex w-full max-w-sm flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-accent-soft,#e6f2ee)] p-2.5 sm:p-3 text-center shrink-0">
+            <p className="text-xs sm:text-sm font-semibold text-[var(--belajar-ink,#1f2933)]">
+              Ada pertanyaan untukmu di bawah!
+            </p>
+            <button
+              type="button"
+              onClick={onScrollToMcq}
+              className="inline-flex min-h-10 sm:min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--belajar-accent,#3d7c6b)] px-4 py-2 text-xs sm:text-sm font-bold text-white hover:bg-[#34695b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] shadow-xs transition-colors cursor-pointer"
+            >
+              <ChevronDown className="size-4 sm:size-5 shrink-0" aria-hidden />
+              <span>Klik ke Bawah untuk Menjawab</span>
+            </button>
+            <span className="text-[11px] sm:text-xs text-[var(--belajar-quiet,#5c6b73)]">
+              Atau geser layar ke bawah
+            </span>
           </div>
         ) : null}
       </div>
@@ -301,6 +322,7 @@ export function SessionReader({ session }: { session: SessionForReader }) {
             page={currentPage}
             studentId={studentId}
             bodyClass={bodyClass}
+            onScrollToMcq={scrollToMcq}
           />
         ) : null}
 
@@ -327,9 +349,21 @@ export function SessionReader({ session }: { session: SessionForReader }) {
                 <button
                   type="button"
                   onClick={scrollToMcq}
-                  className="inline-flex min-h-10 sm:min-h-11 items-center justify-center gap-1 rounded-xl bg-[var(--belajar-accent-soft,#e6f2ee)] px-2.5 sm:px-3 py-1 text-xs sm:text-sm font-semibold text-[var(--belajar-accent,#3d7c6b)] hover:bg-[#d8ece4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)]"
+                  className="inline-flex min-h-10 sm:min-h-11 items-center justify-center gap-1.5 rounded-xl border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent-soft,#e6f2ee)] px-3 sm:px-4 py-1.5 text-xs sm:text-sm md:text-base font-bold text-[var(--belajar-accent,#3d7c6b)] hover:bg-[#d8ece4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] shadow-xs cursor-pointer"
+                  aria-label="Klik ke bawah untuk soal pilihan"
                 >
-                  <span>↓ Soal pilihan</span>
+                  <ChevronDown className="size-4 sm:size-5 shrink-0" aria-hidden />
+                  <span>Klik ke Bawah</span>
+                </button>
+              ) : isLastPage ? (
+                <button
+                  type="button"
+                  onClick={onFinishStory}
+                  className="inline-flex min-h-10 sm:min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--belajar-accent-soft,#e6f2ee)] px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-[var(--belajar-accent,#3d7c6b)] hover:bg-[#d8ece4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)]"
+                  aria-label="Selesai membaca, ke catatan sesi di bawah"
+                >
+                  <ChevronDown className="size-4 shrink-0" aria-hidden />
+                  <span>Catatan di Bawah</span>
                 </button>
               ) : null}
             </div>
@@ -364,15 +398,34 @@ export function SessionReader({ session }: { session: SessionForReader }) {
           className="belajar-snap-page flex h-dvh min-h-dvh max-h-dvh flex-col justify-center items-center p-3 sm:p-6 md:p-8 bg-[var(--belajar-ground)] overflow-y-auto"
         >
           <div className="w-full max-w-2xl flex flex-col gap-3 my-auto">
-            <div className="flex justify-start">
+            <div className="flex w-full items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={scrollToStory}
                 className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-1.5 rounded-lg border border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] px-3 py-1.5 text-xs sm:text-sm font-semibold text-[var(--belajar-quiet,#5c6b73)] hover:bg-[var(--belajar-accent-soft,#e6f2ee)] hover:text-[var(--belajar-accent,#3d7c6b)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)]"
               >
-                <span aria-hidden>↑</span>
+                <ChevronUp className="size-4 shrink-0" aria-hidden />
                 <span>Kembali ke cerita</span>
               </button>
+              {isLastPage ? (
+                <button
+                  type="button"
+                  onClick={onFinishStory}
+                  className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-1.5 rounded-lg bg-[var(--belajar-accent,#3d7c6b)] px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white hover:bg-[#34695b]"
+                >
+                  <span>Selesaikan Cerita</span>
+                  <ChevronDown className="size-4 shrink-0" aria-hidden />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-1.5 rounded-lg bg-[var(--belajar-accent,#3d7c6b)] px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white hover:bg-[#34695b]"
+                >
+                  <span>Berikutnya</span>
+                  <ChevronRight className="size-4 shrink-0" aria-hidden />
+                </button>
+              )}
             </div>
             <PageMcqBlock
               sessionId={session.id}
