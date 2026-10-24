@@ -1,4 +1,5 @@
 import { MediaKind, StoryStatus } from "@prisma/client";
+import { clearSignedUrlCache } from "@/lib/signed-url-cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthzError } from "@/server/policies/access";
 import { deleteMedia, uploadMedia } from "@/server/actions/media";
@@ -288,6 +289,7 @@ describe("deleteMedia authz and audit", () => {
 describe("getSessionForReader personalized image prioritization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearSignedUrlCache();
     storyFindMany.mockResolvedValue([]);
     mediaAssetFindMany.mockResolvedValue([]);
   });
@@ -323,37 +325,37 @@ describe("getSessionForReader personalized image prioritization", () => {
         id: storyId,
         title: "Giliran Bermain",
         category: { name: "Bergiliran" },
-      },
-    });
-
-    pageFindMany.mockResolvedValue([
-      {
-        id: pageId,
-        sortOrder: 1,
-        bodyText: "Hari ini aku bermain bersama teman.",
-        media: [
+        pages: [
           {
-            id: sharedImgId,
-            kind: MediaKind.IMAGE,
-            altText: "Foto umum bersama",
+            id: pageId,
             sortOrder: 1,
-            studentId: null,
-            storageKey: "shared-key",
-            storageBucket: "cermin-media",
-          },
-          {
-            id: personalizedImgId,
-            kind: MediaKind.IMAGE,
-            altText: "Foto Alya",
-            sortOrder: 2,
-            studentId: studentIdA,
-            storageKey: "alya-key",
-            storageBucket: "cermin-media",
+            bodyText: "Hari ini aku bermain bersama teman.",
+            media: [
+              {
+                id: sharedImgId,
+                kind: MediaKind.IMAGE,
+                altText: "Foto umum bersama",
+                sortOrder: 1,
+                studentId: null,
+                storageKey: "shared-key",
+                storageBucket: "cermin-media",
+              },
+              {
+                id: personalizedImgId,
+                kind: MediaKind.IMAGE,
+                altText: "Foto Alya",
+                sortOrder: 2,
+                studentId: studentIdA,
+                storageKey: "alya-key",
+                storageBucket: "cermin-media",
+              },
+            ],
+            mcq: null,
           },
         ],
       },
-    ]);
-
+      observations: [],
+    });
     sessionObservationFindMany.mockResolvedValue([]);
 
     userPreferenceFindUnique.mockResolvedValue({
@@ -370,15 +372,9 @@ describe("getSessionForReader personalized image prioritization", () => {
     expect(session.story.categoryName).toBe("Bergiliran");
     expect(session.availableStories).toEqual([]);
 
-    expect(pageFindMany).toHaveBeenCalledWith(
+    expect(learningSessionFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        select: expect.objectContaining({
-          media: expect.objectContaining({
-            where: {
-              OR: [{ studentId: null }, { studentId: studentIdA }],
-            },
-          }),
-        }),
+        where: { id: sessionId },
       }),
     );
 
@@ -423,38 +419,37 @@ describe("getSessionForReader personalized image prioritization", () => {
         id: storyId,
         title: "Giliran Bermain",
         category: { name: "Bergiliran" },
-      },
-    });
-
-    // DB filter: shared saja di page.media; portrait murid lain lewat lean query.
-    pageFindMany.mockResolvedValue([
-      {
-        id: pageId,
-        sortOrder: 1,
-        bodyText: "Hari ini aku bermain bersama teman.",
-        media: [
+        pages: [
           {
-            id: sharedImgId,
-            kind: MediaKind.IMAGE,
-            altText: "Foto umum bersama",
+            id: pageId,
             sortOrder: 1,
-            studentId: null,
-            storageKey: "shared-key",
-            storageBucket: "cermin-media",
+            bodyText: "Hari ini aku bermain bersama teman.",
+            media: [
+              {
+                id: sharedImgId,
+                kind: MediaKind.IMAGE,
+                altText: "Foto umum bersama",
+                sortOrder: 1,
+                studentId: null,
+                storageKey: "shared-key",
+                storageBucket: "cermin-media",
+              },
+              {
+                id: "other-student-photo",
+                kind: MediaKind.IMAGE,
+                altText: "Foto Budi",
+                sortOrder: 2,
+                studentId: otherStudentId,
+                storageKey: "budi-key",
+                storageBucket: "cermin-media",
+              },
+            ],
+            mcq: null,
           },
         ],
       },
-    ]);
-    mediaAssetFindMany.mockResolvedValue([
-      {
-        id: "other-student-photo",
-        altText: "Foto Budi",
-        sortOrder: 2,
-        studentId: otherStudentId,
-        pageId,
-      },
-    ]);
-
+      observations: [],
+    });
     sessionObservationFindMany.mockResolvedValue([]);
 
     userPreferenceFindUnique.mockResolvedValue({
@@ -510,28 +505,28 @@ describe("getSessionForReader personalized image prioritization", () => {
         id: storyId,
         title: "Giliran Bermain",
         category: { name: "Bergiliran" },
-      },
-    });
-
-    pageFindMany.mockResolvedValue([
-      {
-        id: pageId,
-        sortOrder: 1,
-        bodyText: "Hari ini aku bermain bersama teman.",
-        media: [
+        pages: [
           {
-            id: sharedImgId,
-            kind: MediaKind.IMAGE,
-            altText: "Foto umum bersama",
+            id: pageId,
             sortOrder: 1,
-            studentId: null,
-            storageKey: "shared-key",
-            storageBucket: "cermin-media",
+            bodyText: "Hari ini aku bermain bersama teman.",
+            media: [
+              {
+                id: sharedImgId,
+                kind: MediaKind.IMAGE,
+                altText: "Foto umum bersama",
+                sortOrder: 1,
+                studentId: null,
+                storageKey: "shared-key",
+                storageBucket: "cermin-media",
+              },
+            ],
+            mcq: null,
           },
         ],
       },
-    ]);
-
+      observations: [],
+    });
     sessionObservationFindMany.mockResolvedValue([]);
     userPreferenceFindUnique.mockResolvedValue({
       textSize: "MD",

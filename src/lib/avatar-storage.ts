@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import {
+  getCachedSignedUrl,
+  setCachedSignedUrl,
+} from "@/lib/signed-url-cache";
 
 export const AVATAR_BUCKET = "cermin-media";
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
@@ -69,6 +73,11 @@ export async function uploadAvatarObject(
 export async function createAvatarSignedUrl(
   storageKey: string,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const cached = getCachedSignedUrl(AVATAR_BUCKET, storageKey);
+  if (cached) {
+    return { ok: true, url: cached };
+  }
+
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase.storage
     .from(AVATAR_BUCKET)
@@ -76,6 +85,12 @@ export async function createAvatarSignedUrl(
   if (error || !data?.signedUrl) {
     return { ok: false, error: "Gagal membuat URL foto" };
   }
+  setCachedSignedUrl(
+    AVATAR_BUCKET,
+    storageKey,
+    data.signedUrl,
+    AVATAR_SIGNED_TTL_SECONDS,
+  );
   return { ok: true, url: data.signedUrl };
 }
 

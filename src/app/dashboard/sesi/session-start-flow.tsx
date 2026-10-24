@@ -37,6 +37,7 @@ type CategoryCard = {
   id: string;
   name: string;
   description: string | null;
+  coverUrl?: string | null;
   storyCount: number;
 };
 
@@ -65,15 +66,21 @@ function readWizardFromLocation(pathname: string): {
 
 function CategoryCoverThumb({
   categoryId,
+  coverUrl,
   className,
 }: {
   categoryId: string;
+  coverUrl?: string | null;
   className?: string;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(coverUrl ?? null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (coverUrl !== undefined) {
+      setUrl(coverUrl);
+      return;
+    }
     let cancelled = false;
     setUrl(null);
     setFailed(false);
@@ -81,7 +88,6 @@ function CategoryCoverThumb({
       try {
         const res = await fetch(`/api/category/${categoryId}/cover`, {
           credentials: "same-origin",
-          cache: "no-store",
         });
         const body = (await res.json()) as { url?: string | null };
         if (cancelled) return;
@@ -97,9 +103,20 @@ function CategoryCoverThumb({
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [categoryId, coverUrl]);
 
   if (!url && !failed) {
+    if (coverUrl === null) {
+      return (
+        <div
+          className={`flex h-full items-center justify-center ${className ?? ""}`}
+        >
+          <span className="flex size-12 items-center justify-center rounded-xl bg-white text-[var(--cermin-accent,#3d7c6b)] shadow-sm sm:size-14">
+            <BookOpen className="size-6 sm:size-7" aria-hidden />
+          </span>
+        </div>
+      );
+    }
     return (
       <div
         className={`h-full w-full animate-pulse bg-[var(--accent-soft,#e6f2ee)] ${className ?? ""}`}
@@ -122,7 +139,11 @@ function CategoryCoverThumb({
 
   return (
     // eslint-disable-next-line @next/next/no-img-element -- signed URL TTL pendek
-    <img src={url} alt="" className={`h-full w-full object-cover ${className ?? ""}`} />
+    <img
+      src={url}
+      alt=""
+      className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${className ?? ""}`}
+    />
   );
 }
 
@@ -314,12 +335,16 @@ export function SessionStartFlow({
       const existing = map.get(s.categoryId);
       if (existing) {
         existing.storyCount += 1;
+        if (!existing.coverUrl && s.categoryCoverUrl) {
+          existing.coverUrl = s.categoryCoverUrl;
+        }
         continue;
       }
       map.set(s.categoryId, {
         id: s.categoryId,
         name: s.categoryName,
         description: s.categoryDescription,
+        coverUrl: s.categoryCoverUrl,
         storyCount: 1,
       });
     }
@@ -484,7 +509,7 @@ export function SessionStartFlow({
                     className="group flex min-h-[14rem] w-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-[var(--cermin-border,#d9e2ec)] bg-white text-left shadow-[0_10px_28px_-18px_color-mix(in_srgb,var(--cermin-accent,#3d7c6b)_35%,transparent)] transition-[border-color,box-shadow,transform] duration-200 hover:border-[var(--cermin-accent,#3d7c6b)] hover:shadow-[0_14px_32px_-16px_color-mix(in_srgb,var(--cermin-accent,#3d7c6b)_40%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2 active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-[17rem] md:min-h-[19rem]"
                   >
                     <div className="relative h-28 w-full shrink-0 overflow-hidden border-b border-[var(--cermin-border,#d9e2ec)]/70 bg-[var(--accent-soft,#e6f2ee)]/60 sm:h-36 md:h-44">
-                      <CategoryCoverThumb categoryId={cat.id} />
+                      <CategoryCoverThumb categoryId={cat.id} coverUrl={cat.coverUrl} />
                     </div>
                     <div className="flex flex-1 flex-col gap-2 px-4 py-4 sm:gap-3 sm:px-7 sm:py-5">
                       <div className="flex items-start gap-2">

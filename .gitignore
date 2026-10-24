@@ -48,6 +48,7 @@ yarn-error.log*
 
 # superpowers brainstorm sessions
 .superpowers/
+.impeccable/
 
 # git worktrees
 .worktrees/

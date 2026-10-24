@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cachedQuery } from "@/lib/server-cache";
 import { prisma } from "@/lib/db";
 import { BRANDING_ID } from "@/lib/branding-storage";
 import {
@@ -9,7 +10,7 @@ import {
 export type { BrandingPublic };
 export { brandingLogoSrc, EMPTY_BRANDING } from "@/lib/branding-public";
 
-export const getBrandingPublic = cache(async (): Promise<BrandingPublic> => {
+const fetchBrandingPublic = async (): Promise<BrandingPublic> => {
   try {
     const row = await prisma.institutionBranding.findUnique({
       where: { id: BRANDING_ID },
@@ -40,4 +41,14 @@ export const getBrandingPublic = cache(async (): Promise<BrandingPublic> => {
   } catch {
     return { ...EMPTY_BRANDING };
   }
+};
+
+const getCachedBrandingPublic = cachedQuery(
+  fetchBrandingPublic,
+  ["public-institution-branding"],
+  { tags: ["institution-branding"], revalidate: 3600 },
+);
+
+export const getBrandingPublic = cache(async (): Promise<BrandingPublic> => {
+  return getCachedBrandingPublic();
 });

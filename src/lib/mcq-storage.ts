@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
+  batchGetCachedSignedUrls,
+  setCachedSignedUrl,
+} from "@/lib/signed-url-cache";
+import {
   AVATAR_BUCKET,
   createAvatarSignedUrl,
   deleteAvatarObject,
@@ -43,19 +47,23 @@ export async function createMcqImagesSignedUrlMap(
       storageKeys.filter((k): k is string => typeof k === "string" && k.length > 0),
     ),
   ];
-  const out = new Map<string, string>();
-  if (unique.length === 0) return out;
+  const { hits, misses } = batchGetCachedSignedUrls(MCQ_BUCKET, unique);
+  const out = new Map<string, string>(hits);
+  if (misses.length === 0) return out;
 
   try {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage
       .from(MCQ_BUCKET)
-      .createSignedUrls(unique, ttlSeconds);
+      .createSignedUrls(misses, ttlSeconds);
     if (error || !data) return out;
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      const key = unique[i];
-      if (row?.signedUrl && key) out.set(key, row.signedUrl);
+      const key = misses[i];
+      if (row?.signedUrl && key) {
+        out.set(key, row.signedUrl);
+        setCachedSignedUrl(MCQ_BUCKET, key, row.signedUrl, ttlSeconds);
+      }
     }
   } catch {
     // caller jatuh ke null URL

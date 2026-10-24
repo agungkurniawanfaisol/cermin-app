@@ -290,6 +290,8 @@ model Story {
   @@index([categoryId, status])
   @@index([status, updatedAt(sort: Desc)])
   @@index([status, title])
+  @@index([updatedAt(sort: Desc)])
+  @@index([categoryId, updatedAt(sort: Desc)])
   @@map("stories")
 }
 

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
+  getCachedSignedUrl,
+  setCachedSignedUrl,
+} from "@/lib/signed-url-cache";
+import {
   AuthzError,
   loadMediaForSignedUrl,
   requireSession,
@@ -31,24 +35,40 @@ export async function GET(
     }
 
     const media = await loadMediaForSignedUrl(user, parsed.data.id);
+    let signedUrl = getCachedSignedUrl(media.storageBucket, media.storageKey);
+    if (!signedUrl) {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase.storage
+        .from(media.storageBucket)
+        .createSignedUrl(media.storageKey, SIGNED_TTL_SECONDS);
 
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase.storage
-      .from(media.storageBucket)
-      .createSignedUrl(media.storageKey, SIGNED_TTL_SECONDS);
-
-    if (error || !data?.signedUrl) {
-      return NextResponse.json(
-        { error: "Gagal membuat URL media" },
-        { status: 500 },
+      if (error || !data?.signedUrl) {
+        return NextResponse.json(
+          { error: "Gagal membuat URL media" },
+          { status: 500 },
+        );
+      }
+      signedUrl = data.signedUrl;
+      setCachedSignedUrl(
+        media.storageBucket,
+        media.storageKey,
+        signedUrl,
+        SIGNED_TTL_SECONDS,
       );
     }
 
     if (request.nextUrl.searchParams.get("redirect") === "1") {
-      return NextResponse.redirect(data.signedUrl);
+      return NextResponse.redirect(signedUrl);
     }
 
-    return NextResponse.json({ url: data.signedUrl });
+    return NextResponse.json(
+      { url: signedUrl },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=120, stale-while-revalidate=60",
+        },
+      },
+    );
   } catch (error) {
     if (error instanceof AuthzError) {
       return NextResponse.json(

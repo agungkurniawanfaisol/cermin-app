@@ -1,5 +1,6 @@
 "use server";
 
+import { cachedQuery, safeRevalidateTag } from "@/lib/server-cache";
 import {
   StoryStatus,
   type Prisma,
@@ -57,6 +58,8 @@ export type ActionResult<T> = ActionOk<T> | ActionErr;
 function revalidateStoryPaths(storyId?: string): void {
   revalidatePath("/dashboard/cerita");
   if (storyId) revalidatePath(`/dashboard/cerita/${storyId}`);
+  safeRevalidateTag("published-stories");
+  safeRevalidateTag("story-categories");
 }
 
 export type ListedCategory = {
@@ -540,16 +543,24 @@ export async function listActiveCategories(): Promise<
   });
 }
 
+const getCachedCategoriesForFilter = cachedQuery(
+  async () => {
+    return prisma.storyCategory.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+      orderBy: { sortOrder: "asc" },
+    });
+  },
+  ["story-categories-filter"],
+  { tags: ["story-categories"], revalidate: 3600 },
+);
+
 /** Kategori aktif untuk filter daftar (semua peran yang sudah login). */
 export async function listCategoriesForFilter(): Promise<
   Array<{ id: string; name: string }>
 > {
   await requireSession();
-  return prisma.storyCategory.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true },
-    orderBy: { sortOrder: "asc" },
-  });
+  return getCachedCategoriesForFilter();
 }
 
 /**

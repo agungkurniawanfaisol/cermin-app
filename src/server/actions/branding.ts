@@ -1,5 +1,6 @@
 "use server";
 
+import { safeRevalidateTag } from "@/lib/server-cache";
 import { revalidatePath } from "next/cache";
 import { toActionError } from "@/lib/action-error";
 import { writeAudit } from "@/lib/audit";
@@ -70,6 +71,7 @@ export async function uploadInstitutionLogo(
     revalidatePath("/login");
     revalidatePath("/dashboard", "layout");
     revalidatePath("/dashboard/pengaturan");
+    safeRevalidateTag("institution-branding");
     return { ok: true, data: { hasLogo: true } };
   } catch (error) {
     return {
@@ -111,6 +113,7 @@ export async function removeInstitutionLogo(): Promise<
     revalidatePath("/login");
     revalidatePath("/dashboard", "layout");
     revalidatePath("/dashboard/pengaturan");
+    safeRevalidateTag("institution-branding");
     return { ok: true, data: { hasLogo: false } };
   } catch (error) {
     return {
@@ -163,6 +166,7 @@ export async function updateInstitutionProfile(
     revalidatePath("/");
     revalidatePath("/login");
     revalidatePath("/dashboard/pengaturan");
+    safeRevalidateTag("institution-branding");
     return { ok: true, data: { ok: true } };
   } catch (error) {
     return {

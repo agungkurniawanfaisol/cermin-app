@@ -11,14 +11,28 @@ export async function GET() {
       select: { image: true },
     });
     if (!row?.image || row.image.startsWith("http")) {
-      return NextResponse.json({ url: null });
+      return NextResponse.json(
+        { url: null },
+        {
+          headers: {
+            "Cache-Control": "private, max-age=120, stale-while-revalidate=60",
+          },
+        },
+      );
     }
 
     const signed = await createAvatarSignedUrl(row.image);
     if (!signed.ok) {
       return NextResponse.json({ error: signed.error }, { status: 500 });
     }
-    return NextResponse.json({ url: signed.url });
+    return NextResponse.json(
+      { url: signed.url },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=120, stale-while-revalidate=60",
+        },
+      },
+    );
   } catch (error) {
     if (error instanceof AuthzError) {
       return NextResponse.json(

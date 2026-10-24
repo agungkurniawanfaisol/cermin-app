@@ -1,6 +1,12 @@
 "use server";
 
 import { cache } from "react";
+import { createAvatarSignedUrl } from "@/lib/avatar-storage";
+import {
+  batchGetCachedSignedUrls,
+  batchSetCachedSignedUrls,
+} from "@/lib/signed-url-cache";
+import { cachedQuery } from "@/lib/server-cache";
 import {
   MediaKind,
   Prisma,
@@ -87,11 +93,9 @@ export type PublishedStoryOption = {
 };
 
 /** Deduped per RSC request — tanpa nested pages + tanpa signed URL storage. */
-export const listPublishedStoriesForSession = cache(async (): Promise<
+const fetchPublishedStoriesForSession = async (): Promise<
   PublishedStoryOption[]
 > => {
-  await requireSession();
-
   const stories = await prisma.story.findMany({
     where: { status: StoryStatus.PUBLISHED },
     orderBy: [{ title: "asc" }],
@@ -102,7 +106,7 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
       description: true,
       categoryId: true,
       category: {
-        select: { name: true, description: true },
+        select: { id: true, name: true, description: true, imageKey: true },
       },
       _count: { select: { pages: true } },
       media: {
@@ -137,6 +141,25 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
     }
   }
 
+  const categoryCoverMap = new Map<string, string>();
+  const categoryKeys = Array.from(
+    new Set(
+      stories
+        .map((s) => s.category.imageKey)
+        .filter((k): k is string => typeof k === "string" && k.length > 0),
+    ),
+  );
+  if (categoryKeys.length > 0) {
+    await Promise.all(
+      categoryKeys.map(async (key) => {
+        const res = await createAvatarSignedUrl(key);
+        if (res.ok) {
+          categoryCoverMap.set(key, res.url);
+        }
+      }),
+    );
+  }
+
   return stories.map((story) => ({
     id: story.id,
     title: story.title,
@@ -144,7 +167,9 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
     categoryId: story.categoryId,
     categoryName: story.category.name,
     categoryDescription: story.category.description,
-    categoryCoverUrl: null,
+    categoryCoverUrl: story.category.imageKey
+      ? (categoryCoverMap.get(story.category.imageKey) ?? null)
+      : null,
     pageCount: story._count.pages,
     coverMediaId: resolveStoryCoverMediaId({
       storyLevelCoverId: story.media[0]?.id,
@@ -153,13 +178,37 @@ export const listPublishedStoriesForSession = cache(async (): Promise<
         : [],
     }),
   }));
-});
+};
+
+const getCachedPublishedStories = cachedQuery(
+  fetchPublishedStoriesForSession,
+  ["published-stories-list"],
+  { tags: ["published-stories"], revalidate: 300 },
+);
+
+/** Deduped per RSC request + cached globally across requests with tag invalidation. */
+export const listPublishedStoriesForSession = cache(
+  async (): Promise<PublishedStoryOption[]> => {
+    await requireSession();
+    return getCachedPublishedStories();
+  },
+);
+
+const getCachedPublishedStoriesCount = cachedQuery(
+  async () => {
+    return prisma.story.count({ where: { status: StoryStatus.PUBLISHED } });
+  },
+  ["published-stories-count"],
+  { tags: ["published-stories"], revalidate: 300 },
+);
 
 /** Hanya boolean/count — jangan tarik katalog penuh untuk kartu entry dasbor. */
-export const countPublishedStoriesForSession = cache(async (): Promise<number> => {
-  await requireSession();
-  return prisma.story.count({ where: { status: StoryStatus.PUBLISHED } });
-});
+export const countPublishedStoriesForSession = cache(
+  async (): Promise<number> => {
+    await requireSession();
+    return getCachedPublishedStoriesCount();
+  },
+);
 
 export type ListedSession = {
   id: string;
@@ -192,33 +241,46 @@ export async function listLearningSessionsForViewer(
 
   const and: Prisma.LearningSessionWhereInput[] = [];
 
+  let allowedStudentIds: string[] | null = null;
   if (user.role === "TERAPIS") {
-    and.push({
-      student: {
-        therapistAssignments: {
-          some: { therapistId: user.id, endedAt: null },
-        },
-      },
+    const rows = await prisma.therapistAssignment.findMany({
+      where: { therapistId: user.id, endedAt: null },
+      select: { studentId: true },
     });
+    allowedStudentIds = rows.map((r) => r.studentId);
   } else if (user.role === "ORANG_TUA") {
-    and.push({
-      student: {
-        parentLinks: {
-          some: { parentId: user.id, isActive: true },
-        },
-      },
+    const rows = await prisma.parentLink.findMany({
+      where: { parentId: user.id, isActive: true },
+      select: { studentId: true },
     });
+    allowedStudentIds = rows.map((r) => r.studentId);
   }
 
-  if (parsed.filters.state === "OPEN") {
-    and.push({ endedAt: null });
-  } else if (parsed.filters.state === "ENDED") {
-    and.push({ endedAt: { not: null } });
+  if (allowedStudentIds !== null && allowedStudentIds.length === 0) {
+    return toListResult(
+      [],
+      paginationMeta({
+        page: parsed.page,
+        pageSize: parsed.pageSize,
+        total: 0,
+      }),
+    );
   }
 
   if (studentId) {
-    // Scoped by role relation filters above — unknown/unlinked id → empty list.
+    if (allowedStudentIds !== null && !allowedStudentIds.includes(studentId)) {
+      return toListResult(
+        [],
+        paginationMeta({
+          page: parsed.page,
+          pageSize: parsed.pageSize,
+          total: 0,
+        }),
+      );
+    }
     and.push({ studentId });
+  } else if (allowedStudentIds !== null) {
+    and.push({ studentId: { in: allowedStudentIds } });
   }
 
   if (parsed.q) {
@@ -501,8 +563,8 @@ export async function getSessionForReader(
   if (!parsed.success) throw new AuthzError("Sesi tidak ditemukan", 404);
   const user = await requireSession();
 
-  // Gelombang 1: Ambil data dasar sesi dan preferensi user secara paralel
-  const [sessionBase, preferenceRow] = await Promise.all([
+  // Unified single-phase query: session with pages, media, mcq, and observations in parallel with user preferences and active students
+  const [session, preferenceRow, studentOptionsRaw] = await Promise.all([
     prisma.learningSession.findUnique({
       where: { id: parsed.data.sessionId },
       select: {
@@ -518,6 +580,52 @@ export async function getSessionForReader(
             id: true,
             title: true,
             category: { select: { name: true } },
+            pages: {
+              orderBy: { sortOrder: "asc" },
+              select: {
+                id: true,
+                sortOrder: true,
+                bodyText: true,
+                media: {
+                  orderBy: { sortOrder: "asc" },
+                  select: {
+                    id: true,
+                    kind: true,
+                    altText: true,
+                    sortOrder: true,
+                    studentId: true,
+                    storageKey: true,
+                    storageBucket: true,
+                  },
+                },
+                mcq: {
+                  select: {
+                    id: true,
+                    prompt: true,
+                    promptImageKey: true,
+                    choices: {
+                      orderBy: { key: "asc" },
+                      select: { key: true, labelText: true, imageKey: true },
+                    },
+                    responses: {
+                      where: { sessionId: parsed.data.sessionId },
+                      take: 1,
+                      select: { selectedKey: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        observations: {
+          orderBy: { recordedAt: "desc" },
+          take: 20,
+          select: {
+            id: true,
+            note: true,
+            recordedAt: true,
+            recordedBy: { select: { id: true, name: true } },
           },
         },
       },
@@ -526,119 +634,26 @@ export async function getSessionForReader(
       where: { userId: user.id },
       select: { textSize: true, audioEnabled: true },
     }),
+    listActiveStudentsForSession(),
   ]);
 
-  if (!sessionBase) throw new AuthzError("Sesi tidak ditemukan", 404);
-  await assertCanReadSession(user, sessionBase);
+  if (!session) throw new AuthzError("Sesi tidak ditemukan", 404);
+  await assertCanReadSession(user, session);
 
   const preference = preferenceRow ?? {
     textSize: "MD" as const,
     audioEnabled: true,
   };
 
-  // Gelombang 2: halaman + observasi + murid + metadata portrait murid lain.
-  // Katalog cerita TIDAK di sini (ChangeStoryDialog on-demand).
-  const studentId = sessionBase.student.id;
-  const [pages, observations, studentOptionsRaw, otherPortraits] =
-    await Promise.all([
-      prisma.storyPage.findMany({
-        where: { storyId: sessionBase.storyId },
-        orderBy: { sortOrder: "asc" },
-        select: {
-          id: true,
-          sortOrder: true,
-          bodyText: true,
-          media: {
-            // Hanya shared + portrait murid aktif (storageKey untuk batch sign).
-            where: {
-              OR: [{ studentId: null }, { studentId }],
-            },
-            orderBy: { sortOrder: "asc" },
-            select: {
-              id: true,
-              kind: true,
-              altText: true,
-              sortOrder: true,
-              studentId: true,
-              storageKey: true,
-              storageBucket: true,
-            },
-          },
-          mcq: {
-            select: {
-              id: true,
-              prompt: true,
-              promptImageKey: true,
-              choices: {
-                orderBy: { key: "asc" },
-                select: { key: true, labelText: true, imageKey: true },
-              },
-              responses: {
-                where: { sessionId: sessionBase.id },
-                take: 1,
-                select: { selectedKey: true },
-              },
-            },
-          },
-        },
-      }),
-      prisma.sessionObservation.findMany({
-        where: { sessionId: sessionBase.id },
-        orderBy: { recordedAt: "desc" },
-        take: 20,
-        select: {
-          id: true,
-          note: true,
-          recordedAt: true,
-          recordedBy: { select: { id: true, name: true } },
-        },
-      }),
-      listActiveStudentsForSession(),
-      // Metadata portrait murid lain (tanpa storageKey) — ganti nama lokal.
-      prisma.mediaAsset.findMany({
-        where: {
-          storyId: sessionBase.storyId,
-          pageId: { not: null },
-          kind: MediaKind.IMAGE,
-          studentId: { not: null },
-          NOT: { studentId },
-        },
-        select: {
-          id: true,
-          altText: true,
-          sortOrder: true,
-          studentId: true,
-          pageId: true,
-        },
-      }),
-    ]);
+  const studentId = session.student.id;
+  const pages = session.story.pages;
+  const observations = session.observations;
   const availableStories: PublishedStoryOption[] = [];
 
   const studentOptions = [...studentOptionsRaw];
   // Pastikan murid sesi ada di opsi (mis. status berubah setelah sesi mulai).
-  if (!studentOptions.some((s) => s.id === sessionBase.student.id)) {
-    studentOptions.unshift(sessionBase.student);
-  }
-
-  const otherPortraitsByPage = new Map<
-    string,
-    Array<{
-      id: string;
-      altText: string | null;
-      sortOrder: number;
-      studentId: string;
-    }>
-  >();
-  for (const row of otherPortraits) {
-    if (!row.pageId || !row.studentId) continue;
-    const list = otherPortraitsByPage.get(row.pageId) ?? [];
-    list.push({
-      id: row.id,
-      altText: row.altText,
-      sortOrder: row.sortOrder,
-      studentId: row.studentId,
-    });
-    otherPortraitsByPage.set(row.pageId, list);
+  if (!studentOptions.some((s) => s.id === session.student.id)) {
+    studentOptions.unshift(session.student);
   }
 
   // Pre-sign hanya media tampil: shared + portrait murid aktif (+ MCQ batch).
@@ -677,7 +692,6 @@ export async function getSessionForReader(
     (async () => {
       if (mediaToSign.size === 0) return;
       try {
-        const supabase = getSupabaseAdmin();
         const byBucket = new Map<string, Array<{ id: string; key: string }>>();
         for (const [id, item] of mediaToSign.entries()) {
           const list = byBucket.get(item.bucket) ?? [];
@@ -687,21 +701,35 @@ export async function getSessionForReader(
         await Promise.all(
           Array.from(byBucket.entries()).map(async ([bucket, items]) => {
             const keys = items.map((x) => x.key);
+            const byKey = new Map(items.map((x) => [x.key, x.id]));
+            const { hits, misses } = batchGetCachedSignedUrls(bucket, keys);
+
+            for (const [key, url] of hits.entries()) {
+              const id = byKey.get(key);
+              if (id) signedUrlMap.set(id, url);
+            }
+
+            if (misses.length === 0) return;
+
+            const supabase = getSupabaseAdmin();
             const { data, error } = await supabase.storage
               .from(bucket)
-              .createSignedUrls(keys, 300);
+              .createSignedUrls(misses, 300);
             if (!error && data) {
-              const byKey = new Map(items.map((x) => [x.key, x.id]));
+              const toCache: Array<{ key: string; url: string }> = [];
               for (let i = 0; i < data.length; i++) {
                 const res = data[i] as {
                   signedUrl?: string;
                   path?: string;
                 } | null;
                 if (!res?.signedUrl) continue;
-                const idFromPath =
-                  typeof res.path === "string" ? byKey.get(res.path) : undefined;
-                const id = idFromPath ?? items[i]?.id;
+                const key = res.path ?? misses[i];
+                const id = byKey.get(key);
                 if (id) signedUrlMap.set(id, res.signedUrl);
+                if (key) toCache.push({ key, url: res.signedUrl });
+              }
+              if (toCache.length > 0) {
+                batchSetCachedSignedUrls(bucket, toCache, 300);
               }
             }
           }),
@@ -740,18 +768,7 @@ export async function getSessionForReader(
           id: img.id,
           altText: img.altText,
           sortOrder: img.sortOrder,
-          url: signedUrlMap.get(img.id) ?? null,
-        };
-      }
-    }
-    for (const img of otherPortraitsByPage.get(page.id) ?? []) {
-      const existing = portraitsByStudentId[img.studentId];
-      if (!existing || img.sortOrder < existing.sortOrder) {
-        portraitsByStudentId[img.studentId] = {
-          id: img.id,
-          altText: img.altText,
-          sortOrder: img.sortOrder,
-          url: null,
+          url: img.studentId === studentId ? (signedUrlMap.get(img.id) ?? null) : null,
         };
       }
     }
@@ -786,15 +803,15 @@ export async function getSessionForReader(
   });
 
   return {
-    id: sessionBase.id,
-    startedAt: sessionBase.startedAt,
-    endedAt: sessionBase.endedAt,
-    student: sessionBase.student,
+    id: session.id,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt,
+    student: session.student,
     studentOptions,
     story: {
-      id: sessionBase.story.id,
-      title: sessionBase.story.title,
-      categoryName: sessionBase.story.category.name,
+      id: session.story.id,
+      title: session.story.title,
+      categoryName: session.story.category.name,
     },
     availableStories,
     pages: pagesWithMcq,
