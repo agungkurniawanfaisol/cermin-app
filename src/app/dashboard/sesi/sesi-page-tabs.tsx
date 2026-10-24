@@ -55,7 +55,7 @@ export function SesiPageTabs({ initialTab, mulai, riwayat }: Props) {
     <Tabs
       value={current}
       onValueChange={onValueChange}
-      className="mt-4 w-full gap-3"
+      className="mt-2.5 sm:mt-4 landscape:mt-2 w-full gap-3"
     >
       <TabsList
         variant="line"

@@ -42,14 +42,14 @@ function SesiShell({ children }: { children: ReactNode }) {
   return (
     <main className="relative w-full flex-1 overflow-x-hidden">
       <CalmSenseBackdrop variant="dashboard" />
-      <div className="relative z-10 px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:px-10">
-        <p className="text-sm font-medium tracking-wide text-[var(--cermin-accent,#3d7c6b)] uppercase">
+      <div className="relative z-10 px-4 py-4 landscape:py-2.5 sm:px-6 sm:py-8 md:px-8 lg:px-10">
+        <p className="text-xs sm:text-sm font-medium tracking-wide text-[var(--cermin-accent,#3d7c6b)] uppercase">
           CERMIN
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-[var(--text,#1f2933)]">
+        <h1 className="mt-1 sm:mt-2 text-xl sm:text-3xl landscape:text-xl font-semibold text-[var(--text,#1f2933)]">
           Sesi belajar
         </h1>
-        <p className="mt-2 text-sm text-[var(--cermin-muted,#5c6b73)]">
+        <p className="mt-0.5 sm:mt-2 text-xs sm:text-sm text-[var(--cermin-muted,#5c6b73)] line-clamp-1 sm:line-clamp-none">
           Tekan play untuk memilih cerita di layar penuh, atau buka riwayat sesi
           di tab sebelah.
         </p>

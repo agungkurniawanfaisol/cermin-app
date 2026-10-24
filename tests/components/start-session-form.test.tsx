@@ -141,4 +141,58 @@ describe("Session start — entry + fullscreen wizard", () => {
     });
     expect(pushMock).toHaveBeenCalledWith("/belajar/session-123");
   });
+
+  it("paginates categories in short landscape viewport when categories > 2", () => {
+    window.innerWidth = 844;
+    window.innerHeight = 390;
+
+    const manyStories: sessionsModule.PublishedStoryOption[] = [
+      ...stories,
+      {
+        id: "story-4",
+        title: "Menyapa Teman",
+        description: "Sosialisasi",
+        categoryId: "cat-3",
+        categoryName: "Komunikasi",
+        categoryDescription: "Berbicara santun",
+        categoryCoverUrl: null,
+        pageCount: 3,
+        coverMediaId: null,
+      },
+    ];
+
+    render(
+      <SessionStartFlow
+        students={students}
+        stories={manyStories}
+        initialStep="category"
+        fullscreen
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Bergiliran/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Emosi & Regulasi/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Komunikasi/i })).toBeNull();
+
+    const nextBtn = screen.getByRole("button", { name: /Kategori berikutnya/i });
+    expect(nextBtn).toBeTruthy();
+    fireEvent.click(nextBtn);
+
+    expect(screen.getByRole("button", { name: /Komunikasi/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Bergiliran/i })).toBeNull();
+  });
+
+  it("handles cancel button navigation to /dashboard/sesi", () => {
+    render(
+      <SessionStartFlow
+        students={students}
+        stories={stories}
+        initialStep="category"
+        fullscreen
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/sesi");
+  });
 });

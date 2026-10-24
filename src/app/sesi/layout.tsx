@@ -8,9 +8,9 @@ export default function SesiFullscreenLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="relative min-h-dvh overflow-x-hidden bg-[var(--bg,#f7f4ef)] text-[var(--text,#1f2933)]">
+    <div className="relative min-h-dvh landscape:h-dvh landscape:max-h-dvh landscape:overflow-hidden overflow-x-hidden bg-[var(--bg,#f7f4ef)] text-[var(--text,#1f2933)]">
       <CalmSenseBackdrop variant="sesi" />
-      <div className="relative z-10">{children}</div>
+      <div className="relative z-10 landscape:h-full">{children}</div>
     </div>
   );
 }

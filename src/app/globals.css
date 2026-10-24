@@ -616,3 +616,33 @@ button.group .belajar-sound-viz {
   border-top: 2px dashed var(--belajar-line);
   background-color: color-mix(in srgb, var(--belajar-page) 70%, var(--belajar-ground));
 }
+
+/* Full-bleed wizard container locked to 100dvh in landscape */
+@media (orientation: landscape) {
+  .sesi-fullscreen-container {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+}
+
+/* Compact styling for mobile landscape screens (height <= 520px) */
+@media (orientation: landscape) and (max-height: 520px) {
+  .sesi-shell-compact {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .sesi-header-compact {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  .sesi-card-compact {
+    padding: 0.5rem 0.75rem !important;
+  }
+}
