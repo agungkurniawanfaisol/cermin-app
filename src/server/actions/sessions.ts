@@ -141,7 +141,6 @@ const fetchPublishedStoriesForSession = async (): Promise<
     }
   }
 
-  const categoryCoverMap = new Map<string, string>();
   const categoryKeys = Array.from(
     new Set(
       stories
@@ -149,16 +148,10 @@ const fetchPublishedStoriesForSession = async (): Promise<
         .filter((k): k is string => typeof k === "string" && k.length > 0),
     ),
   );
-  if (categoryKeys.length > 0) {
-    await Promise.all(
-      categoryKeys.map(async (key) => {
-        const res = await createAvatarSignedUrl(key);
-        if (res.ok) {
-          categoryCoverMap.set(key, res.url);
-        }
-      }),
-    );
-  }
+  const categoryCoverMap =
+    categoryKeys.length > 0
+      ? await createMcqImagesSignedUrlMap(categoryKeys, 300)
+      : new Map<string, string>();
 
   return stories.map((story) => ({
     id: story.id,

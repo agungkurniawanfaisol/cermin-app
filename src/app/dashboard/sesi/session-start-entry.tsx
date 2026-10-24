@@ -56,6 +56,7 @@ export function SessionStartEntry({
         </p>
         <Link
           href="/sesi/mulai?step=category"
+          prefetch={true}
           className="group inline-flex min-h-12 min-w-[11rem] items-center justify-center gap-2.5 rounded-full bg-[var(--cermin-accent,#3d7c6b)] px-7 text-base font-semibold text-white shadow-[0_8px_22px_-10px_color-mix(in_srgb,var(--cermin-accent,#3d7c6b)_45%,transparent)] transition-[transform,background-color] duration-200 hover:bg-[var(--focus,#0b6e4f)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-14 sm:min-w-[13rem] sm:text-lg"
         >
           <span className="flex size-9 items-center justify-center rounded-full bg-white/20 sm:size-10">

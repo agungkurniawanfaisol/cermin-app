@@ -13,11 +13,18 @@ export function cachedQuery<T extends (...args: unknown[]) => Promise<unknown>>(
   if (process.env.NODE_ENV === "test") {
     return fn;
   }
+
+  let cached: ((...args: unknown[]) => Promise<unknown>) | null = null;
   try {
-    const cached = unstable_cache(fn, keyParts, options);
-    return ((...args: unknown[]) => {
+    cached = unstable_cache(fn, keyParts, options);
+  } catch {
+    cached = null;
+  }
+
+  return (async (...args: unknown[]) => {
+    if (cached) {
       try {
-        return cached(...args);
+        return await cached(...args);
       } catch (err: unknown) {
         if (
           err instanceof Error &&
@@ -27,10 +34,9 @@ export function cachedQuery<T extends (...args: unknown[]) => Promise<unknown>>(
         }
         throw err;
       }
-    }) as T;
-  } catch {
-    return fn;
-  }
+    }
+    return fn(...args);
+  }) as T;
 }
 
 /**

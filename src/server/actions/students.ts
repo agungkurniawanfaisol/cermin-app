@@ -153,24 +153,31 @@ export const listActiveStudentsForSession = cache(async (): Promise<
   Array<{ id: string; displayName: string }>
 > => {
   const user = await requireSession();
-  const and: Prisma.StudentWhereInput[] = [{ status: StudentStatus.ACTIVE }];
 
+  let allowedStudentIds: string[] | null = null;
   if (user.role === "TERAPIS") {
-    and.push({
-      therapistAssignments: {
-        some: { therapistId: user.id, endedAt: null },
-      },
+    const rows = await prisma.therapistAssignment.findMany({
+      where: { therapistId: user.id, endedAt: null },
+      select: { studentId: true },
     });
+    allowedStudentIds = rows.map((r) => r.studentId);
   } else if (user.role === "ORANG_TUA") {
-    and.push({
-      parentLinks: {
-        some: { parentId: user.id, isActive: true },
-      },
+    const rows = await prisma.parentLink.findMany({
+      where: { parentId: user.id, isActive: true },
+      select: { studentId: true },
     });
+    allowedStudentIds = rows.map((r) => r.studentId);
+  }
+
+  if (allowedStudentIds !== null && allowedStudentIds.length === 0) {
+    return [];
   }
 
   return prisma.student.findMany({
-    where: { AND: and },
+    where: {
+      status: StudentStatus.ACTIVE,
+      ...(allowedStudentIds !== null ? { id: { in: allowedStudentIds } } : {}),
+    },
     select: { id: true, displayName: true },
     orderBy: { displayName: "asc" },
     take: 50,

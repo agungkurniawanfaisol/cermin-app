@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BookOpen, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Loader2, Play } from "lucide-react";
 import {
   startLearningSession,
   type PublishedStoryOption,
@@ -411,27 +411,25 @@ export function SessionStartFlow({
     router.push("/dashboard/sesi");
   }
 
-  function onStartStory() {
+  async function onStartStory() {
     if (!studentId || !storyIdParam || starting || pending) return;
     setError(null);
     setStarting(true);
-    startTransition(async () => {
-      try {
-        const result = await startLearningSession({
-          studentId,
-          storyId: storyIdParam,
-        });
-        if (!result.ok) {
-          setError(result.error);
-          setStarting(false);
-          return;
-        }
-        router.push(`/belajar/${result.data.id}`);
-      } catch {
-        setError("Gagal memulai sesi. Coba lagi.");
+    try {
+      const result = await startLearningSession({
+        studentId,
+        storyId: storyIdParam,
+      });
+      if (!result.ok) {
+        setError(result.error);
         setStarting(false);
+        return;
       }
-    });
+      router.push(`/belajar/${result.data.id}`);
+    } catch {
+      setError("Gagal memulai sesi. Coba lagi.");
+      setStarting(false);
+    }
   }
 
   if (students.length === 0) {
@@ -756,13 +754,17 @@ export function SessionStartFlow({
             <button
               type="button"
               disabled={!selectedStory || !studentId || pending || starting}
-              onClick={onStartStory}
+              onClick={() => void onStartStory()}
               className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-[var(--cermin-accent,#3d7c6b)] px-8 text-lg font-semibold text-white shadow-[0_8px_24px_rgba(61,124,107,0.28)] transition-[transform,background-color,box-shadow] duration-200 hover:bg-[var(--focus,#0b6e4f)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-14 sm:w-auto sm:min-w-[14rem]"
             >
               <span className="flex size-9 items-center justify-center rounded-full bg-white/20">
-                <Play className="size-5 fill-current" aria-hidden />
+                {starting || pending ? (
+                  <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden />
+                ) : (
+                  <Play className="size-5 fill-current" aria-hidden />
+                )}
               </span>
-              {pending || starting ? "Memulai…" : "Mulai Cerita"}
+              {starting || pending ? "Menyiapkan sesi…" : "Mulai Cerita"}
             </button>
           </div>
         </section>
