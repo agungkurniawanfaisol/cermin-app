@@ -185,6 +185,17 @@ export function SessionReader({ session }: { session: SessionForReader }) {
     const behavior = prefersReducedMotion() ? "auto" : "smooth";
     mcqRef.current?.scrollIntoView({ behavior, block: "start" });
   }, []);
+
+  const scrollToAdult = useCallback(() => {
+    setReadingDone(true);
+    requestAnimationFrame(() => {
+      adultRef.current?.scrollIntoView({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }, []);
+
   function onFinishStory() {
     setReadingDone(true);
     requestAnimationFrame(() => {
@@ -395,10 +406,11 @@ export function SessionReader({ session }: { session: SessionForReader }) {
         <section
           ref={mcqRef}
           aria-label="Layar soal pilihan"
-          className="belajar-snap-page flex h-dvh min-h-dvh max-h-dvh flex-col justify-center items-center p-3 sm:p-6 md:p-8 bg-[var(--belajar-ground)] overflow-y-auto"
+          className="belajar-snap-page flex h-dvh min-h-dvh max-h-dvh flex-col justify-between items-center p-3 sm:p-5 md:p-6 bg-[var(--belajar-ground)] overflow-y-auto"
         >
-          <div className="w-full max-w-2xl flex flex-col gap-3 my-auto">
-            <div className="flex w-full items-center justify-between gap-2">
+          <div className="w-full max-w-2xl flex flex-1 flex-col justify-between gap-2.5 sm:gap-3 my-auto">
+            {/* Top navigation bar within Screen 2 */}
+            <div className="flex w-full items-center justify-between gap-2 shrink-0">
               <button
                 type="button"
                 onClick={scrollToStory}
@@ -407,6 +419,17 @@ export function SessionReader({ session }: { session: SessionForReader }) {
                 <ChevronUp className="size-4 shrink-0" aria-hidden />
                 <span>Kembali ke cerita</span>
               </button>
+
+              <button
+                type="button"
+                onClick={scrollToAdult}
+                className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-1.5 rounded-lg border-2 border-[var(--belajar-accent,#3d7c6b)] bg-[var(--belajar-accent-soft,#e6f2ee)] px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-bold text-[var(--belajar-accent,#3d7c6b)] hover:bg-[#d8ece4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] shadow-xs cursor-pointer"
+                aria-label="Klik ke bawah untuk catatan sesi"
+              >
+                <ChevronDown className="size-4 shrink-0" aria-hidden />
+                <span>Catatan di Bawah</span>
+              </button>
+
               {isLastPage ? (
                 <button
                   type="button"
@@ -427,12 +450,43 @@ export function SessionReader({ session }: { session: SessionForReader }) {
                 </button>
               )}
             </div>
-            <PageMcqBlock
-              sessionId={session.id}
-              studentId={studentId}
-              mcq={currentPage.mcq}
-              disabled={ended}
-            />
+
+            <div className="flex-1 min-h-0 flex flex-col justify-center">
+              <PageMcqBlock
+                sessionId={session.id}
+                studentId={studentId}
+                mcq={currentPage.mcq}
+                disabled={ended}
+              />
+            </div>
+
+            {/* Bottom prompt card & downward button on Screen 2 */}
+            <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-2 rounded-2xl border-2 border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-accent-soft,#e6f2ee)] p-2.5 sm:p-3 text-center shrink-0">
+              <button
+                type="button"
+                onClick={scrollToAdult}
+                className="inline-flex min-h-10 sm:min-h-11 w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl bg-[var(--belajar-accent,#3d7c6b)] px-4 py-2 text-xs sm:text-sm font-bold text-white hover:bg-[#34695b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--belajar-focus,#0b6e4f)] shadow-xs transition-colors cursor-pointer"
+                aria-label="Klik ke bawah untuk catatan sesi orang dewasa"
+              >
+                <ChevronDown className="size-4 sm:size-5 shrink-0" aria-hidden />
+                <span>{isLastPage ? "Selesai & Ke Catatan di Bawah" : "Klik ke Bawah untuk Catatan Sesi"}</span>
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] sm:text-xs text-[var(--belajar-quiet,#5c6b73)]">
+                  Atau geser layar ke bawah
+                </span>
+                {!isLastPage ? (
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="inline-flex min-h-9 sm:min-h-10 items-center justify-center gap-1.5 rounded-xl border border-[var(--belajar-line,#c5d4cc)] bg-[var(--belajar-page,#fff)] px-3 py-1.5 text-xs sm:text-sm font-semibold text-[var(--belajar-ink,#1f2933)] hover:bg-[var(--belajar-accent-soft,#e6f2ee)] cursor-pointer"
+                  >
+                    <span>Halaman Berikutnya</span>
+                    <ChevronRight className="size-4 shrink-0" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </div>
         </section>
       ) : null}

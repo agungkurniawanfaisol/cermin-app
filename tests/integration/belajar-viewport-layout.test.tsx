@@ -164,8 +164,20 @@ describe("Belajar Landscape & Full-Screen Snap Viewport Layout", () => {
     // Clicking "Kembali ke cerita" calls scrollIntoView
     fireEvent.click(backButtons[0]);
     expect(scrollIntoViewMock).toHaveBeenCalled();
-  });
 
+    // Downward cues are present on Screen 2 to scroll to Screen 3 (Adult notes)
+    const mcqDownBtn = within(mcqScreen).getByRole("button", {
+      name: /catatan sesi orang dewasa/i,
+    });
+    expect(mcqDownBtn).toBeInTheDocument();
+
+    const mcqTopDownBtn = within(mcqScreen).getByRole("button", {
+      name: "Klik ke bawah untuk catatan sesi",
+    });
+    expect(mcqTopDownBtn).toBeInTheDocument();
+    fireEvent.click(mcqDownBtn);
+    expect(scrollIntoViewMock).toHaveBeenCalled();
+  });
   it("renders Screen 3 (Adult Viewport) as a snap page below story", () => {
     render(<SessionReader session={mockSession} />);
 

@@ -204,17 +204,26 @@ export async function ensureChildModeFixture(): Promise<{
     student = await prisma.student.create({ data: { displayName } });
   }
 
-  await prisma.therapistAssignment.updateMany({
-    where: { studentId: student.id, endedAt: null },
-    data: { endedAt: new Date() },
-  });
-  await prisma.therapistAssignment.create({
-    data: {
-      therapistId: therapist.id,
+  const existingAssignment = await prisma.therapistAssignment.findFirst({
+    where: {
       studentId: student.id,
-      assignedById: admin.id,
+      therapistId: therapist.id,
+      endedAt: null,
     },
   });
+  if (!existingAssignment) {
+    await prisma.therapistAssignment.updateMany({
+      where: { studentId: student.id, endedAt: null },
+      data: { endedAt: new Date() },
+    });
+    await prisma.therapistAssignment.create({
+      data: {
+        therapistId: therapist.id,
+        studentId: student.id,
+        assignedById: admin.id,
+      },
+    });
+  }
 
   const title = "E2E Cerita Child Mode";
   let story = await prisma.story.findFirst({
