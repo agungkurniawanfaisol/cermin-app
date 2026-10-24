@@ -15,21 +15,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-/** Grid responsif — di mobile 1–2 kolom supaya pilihan tidak terpotong. */
+/** Grid responsif — di mobile 1–2 kolom, di landscape 2–3 kolom supaya pilihan tidak terpotong. */
 function answersGridClass(count: number): string {
   if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "grid-cols-1 sm:grid-cols-2";
-  if (count === 3) return "grid-cols-1 sm:grid-cols-3";
-  if (count === 4) return "grid-cols-1 sm:grid-cols-2";
-  return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+  if (count === 2) return "grid-cols-1 sm:grid-cols-2 landscape:grid-cols-2";
+  if (count === 3) return "grid-cols-1 sm:grid-cols-3 landscape:grid-cols-3";
+  if (count === 4) return "grid-cols-1 sm:grid-cols-2 landscape:grid-cols-2";
+  return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 landscape:grid-cols-2";
 }
 
 function answerImageMax(count: number): string {
-  if (count <= 2) return "max-h-[min(22dvh,9rem)]";
-  if (count <= 4) return "max-h-[min(16dvh,6.5rem)]";
-  return "max-h-[min(12dvh,5rem)]";
+  if (count <= 2) return "max-h-[min(20dvh,8rem)] landscape:max-h-[min(16dvh,5rem)]";
+  if (count <= 4) return "max-h-[min(16dvh,6.5rem)] landscape:max-h-[min(12dvh,4rem)]";
+  return "max-h-[min(12dvh,5rem)] landscape:max-h-[min(10dvh,3.5rem)]";
 }
-
 type Feedback = "correct" | "incorrect";
 
 export function PageMcqBlock({
@@ -75,7 +74,7 @@ export function PageMcqBlock({
   return (
     <>
       <section
-        className="belajar-page-card flex w-full flex-col gap-3 p-3 sm:gap-3.5 sm:p-4"
+        className="belajar-page-card flex w-full flex-col gap-2.5 p-3 sm:gap-3.5 sm:p-5 max-h-full overflow-y-auto"
         aria-label="Soal pilihan"
       >
         <p className="text-base font-semibold leading-snug text-[var(--belajar-ink,#1f2933)] sm:text-lg">
@@ -86,7 +85,7 @@ export function PageMcqBlock({
           <img
             src={mcq.promptImageUrl}
             alt=""
-            className="mx-auto max-h-[min(14dvh,5.5rem)] w-auto object-contain"
+            className="mx-auto max-h-[min(14dvh,5.5rem)] landscape:max-h-[min(12dvh,4rem)] w-auto object-contain"
           />
         ) : null}
         <ul className={`grid gap-2 sm:gap-2.5 ${answersGridClass(n)}`}>

@@ -37,9 +37,9 @@ export async function loginAs(
   password: string,
 ): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Kata sandi").fill(password);
-  await page.getByRole("button", { name: "Masuk" }).click();
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Kata sandi", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Masuk", exact: true }).click();
 }
 
 export async function expectDashboard(page: Page): Promise<void> {
