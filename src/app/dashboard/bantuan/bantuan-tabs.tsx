@@ -1,7 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Tabs,
   TabsContent,
@@ -33,31 +33,40 @@ export function BantuanTabs({
   guides,
   isAdmin,
 }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const [current, setCurrent] = useState<TabValue>(() => {
+    const raw = searchParams.get("tab");
+    return raw === "petunjuk" || raw === "faq" ? raw : initialTab;
+  });
 
-  const raw = searchParams.get("tab");
-  const current: TabValue =
-    raw === "petunjuk" || raw === "faq" ? raw : initialTab;
+  useEffect(() => {
+    function onPopState() {
+      const sp = new URLSearchParams(window.location.search);
+      const raw = sp.get("tab");
+      setCurrent(raw === "petunjuk" || raw === "faq" ? raw : initialTab);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [initialTab]);
 
   function onValueChange(next: string | number | null) {
     if (next == null) return;
     const value = String(next) as TabValue;
     if (value !== "faq" && value !== "petunjuk") return;
-    // Skip replace bila tab sama — cegah soft-nav / loading loop.
     if (value === current) return;
-    const params = new URLSearchParams(searchParams.toString());
-    if (value === "faq") params.delete("tab");
-    else params.set("tab", value);
-    const qs = params.toString();
-    const href = qs ? `${pathname}?${qs}` : pathname;
-    startTransition(() => {
-      router.replace(href, { scroll: false });
-    });
-  }
+    setCurrent(value);
 
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (value === "faq") params.delete("tab");
+      else params.set("tab", value);
+      const qs = params.toString();
+      const href = qs
+        ? `${window.location.pathname}?${qs}`
+        : window.location.pathname;
+      window.history.replaceState(null, "", href);
+    }
+  }
   return (
     <Tabs
       value={current}
@@ -68,7 +77,7 @@ export function BantuanTabs({
         variant="line"
         aria-label="Bagian bantuan"
         className="h-auto min-h-11 w-full flex-wrap justify-start gap-0 rounded-none border-b border-[var(--cermin-border,#d9e2ec)] bg-transparent p-0"
-        data-pending={pending ? "" : undefined}
+
       >
         {TAB_OPTIONS.map((opt) => (
           <TabsTrigger

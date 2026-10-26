@@ -11,44 +11,46 @@ import {
 import { getDashboardShellData } from "@/server/queries/dashboard-shell";
 import { AuthzError } from "@/server/policies/access";
 
-/**
- * Auth + Prisma di chrome — boleh block. Hindari loading.tsx / Suspense page
- * yang wipe konten tiap soft-nav (terasa refresh terus).
- */
-export const instant = false;
 
 /** Auth chrome reads cookies — stream behind Suspense; page stays outside. */
 
+
 async function DashboardAside() {
+  let data;
   try {
-    const { user, navItems, branding } = await getDashboardShellData();
-    return (
-      <DashboardSidebar
-        navItems={navItems}
-        role={user.role}
-        branding={branding}
-      />
-    );
+    data = await getDashboardShellData();
   } catch (error) {
     if (error instanceof AuthzError && (error.status === 401 || error.status === 403)) {
       redirect("/login");
     }
     throw error;
   }
+  return (
+    <DashboardSidebar
+      navItems={data.navItems}
+      role={data.user.role}
+      branding={data.branding}
+    />
+  );
 }
 
 async function DashboardHeader() {
+  let data;
   try {
-    const { user, navItems, branding } = await getDashboardShellData();
-    return (
-      <DashboardTopBar user={user} navItems={navItems} branding={branding} />
-    );
+    data = await getDashboardShellData();
   } catch (error) {
     if (error instanceof AuthzError && (error.status === 401 || error.status === 403)) {
       redirect("/login");
     }
     throw error;
   }
+  return (
+    <DashboardTopBar
+      user={data.user}
+      navItems={data.navItems}
+      branding={data.branding}
+    />
+  );
 }
 
 /**

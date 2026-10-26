@@ -8,8 +8,6 @@ import {
   BookOpen,
   CircleHelp,
   ClipboardList,
-  LayoutDashboard,
-  ScrollText,
   Settings,
   UserCog,
   Users,
@@ -23,12 +21,10 @@ export type DashboardNavItem = {
 };
 
 const ICONS: Record<string, LucideIcon> = {
-  "/dashboard": LayoutDashboard,
   "/dashboard/murid": Users,
   "/dashboard/cerita": BookOpen,
   "/dashboard/sesi": ClipboardList,
   "/dashboard/pengguna": UserCog,
-  "/dashboard/audit": ScrollText,
   "/dashboard/bantuan": CircleHelp,
   "/dashboard/pengaturan": Settings,
 };
@@ -83,9 +79,8 @@ export function DashboardNav({
           <Link
             key={item.href}
             href={item.href}
-            prefetch
+            prefetch={false}
             onClick={onNavigate}
-            title={iconOnly ? item.label : undefined}
             className={cn(
               "relative inline-flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg text-sm font-medium transition-colors duration-200",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus,#0b6e4f)] focus-visible:ring-offset-2",

@@ -13,8 +13,6 @@ import {
   listStoriesForViewer,
 } from "@/server/actions/stories";
 
-export const instant = false;
-
 function toInput(
   sp: Record<string, string | string[] | undefined>,
 ): ListQueryInput {

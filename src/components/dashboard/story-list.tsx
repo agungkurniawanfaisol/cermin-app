@@ -108,7 +108,6 @@ export function StoryList({
                     </button>
                     <Link
                       href={href}
-                      prefetch
                       className={
                         story.continuePrimary
                           ? iconBtnPrimary

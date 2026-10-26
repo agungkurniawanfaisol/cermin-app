@@ -9,7 +9,10 @@ import {
   countPublishedStoriesForSession,
   listLearningSessionsForViewer,
 } from "@/server/actions/sessions";
-import { requireSession } from "@/server/policies/access";
+import {
+  requireSession,
+  userHasAnyStudentAccess,
+} from "@/server/policies/access";
 import { CalmSenseBackdrop } from "@/components/calm/calm-sense-backdrop";
 import { SessionStartEntry } from "./session-start-entry";
 import { SesiPageTabs } from "./sesi-page-tabs";
@@ -75,13 +78,14 @@ function SesiBodySkeleton() {
 }
 
 async function MulaiPanel() {
-  const [students, publishedCount] = await Promise.all([
-    listActiveStudentsForSession(),
+  const user = await requireSession();
+  const [hasStudents, publishedCount] = await Promise.all([
+    userHasAnyStudentAccess(user),
     countPublishedStoriesForSession(),
   ]);
   return (
     <SessionStartEntry
-      hasStudents={students.length > 0}
+      hasStudents={hasStudents}
       hasPublishedStories={publishedCount > 0}
     />
   );

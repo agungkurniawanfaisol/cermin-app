@@ -26,15 +26,11 @@ export const getDashboardShellData = cache(async (): Promise<{
   ]);
 
   const navItems: DashboardNavItem[] = [
-    { href: "/dashboard", label: "Dasbor", exact: true },
     { href: "/dashboard/murid", label: "Murid" },
     { href: "/dashboard/cerita", label: "Cerita" },
     { href: "/dashboard/sesi", label: "Sesi" },
     ...(user.role === "ADMIN"
-      ? [
-          { href: "/dashboard/pengguna", label: "Pengguna" },
-          { href: "/dashboard/audit", label: "Audit" },
-        ]
+      ? [{ href: "/dashboard/pengguna", label: "Pengguna" }]
       : []),
     { href: "/dashboard/bantuan", label: "Bantuan" },
     { href: "/dashboard/pengaturan", label: "Pengaturan" },

@@ -78,7 +78,9 @@ model User {
 
   // List pengguna: filter peran/status + sort
   @@index([role, status, name])
+  @@index([role, status, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
   @@index([name])
   @@map("users")
 }
@@ -189,6 +191,7 @@ model Student {
   // List murid: filter status + sort nama / tanggal dibuat
   @@index([status, displayName])
   @@index([status, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
   @@index([displayName])
   @@map("students")
 }
@@ -204,7 +207,6 @@ model TherapistAssignment {
   student      Student   @relation(fields: [studentId], references: [id])
   assignedBy   User      @relation("AssignmentCreator", fields: [assignedById], references: [id])
 
-  @@index([therapistId])
   @@index([studentId, endedAt])
   // listActiveStudents / authz: therapistId + endedAt IS NULL
   @@index([therapistId, endedAt])
@@ -288,6 +290,7 @@ model Story {
 
   // List cerita: filter kategori+status; status+sort updated/title
   @@index([categoryId, status])
+  @@index([categoryId, status, updatedAt(sort: Desc)])
   @@index([status, updatedAt(sort: Desc)])
   @@index([status, title])
   @@index([updatedAt(sort: Desc)])
@@ -437,6 +440,7 @@ model LearningSession {
 
   // Riwayat sesi: per murid / pemandu + urutan waktu
   @@index([studentId, startedAt(sort: Desc)])
+  @@index([studentId, endedAt, startedAt(sort: Desc)])
   @@index([ledByUserId, startedAt(sort: Desc)])
   @@index([storyId])
   @@index([startedAt(sort: Desc)])
@@ -484,6 +488,7 @@ model AuditLog {
   @@index([createdAt(sort: Desc)])
   @@index([actorId])
   @@index([action, createdAt(sort: Desc)])
+  @@index([entityType, createdAt(sort: Desc)])
   @@index([entityType, entityId])
   @@map("audit_logs")
 }

@@ -21,46 +21,46 @@ export type DashboardSummary = {
   tip: string;
 };
 
-function studentWhereForRole(user: SessionUser) {
-  if (user.role === "ADMIN") {
-    return { status: StudentStatus.ACTIVE };
-  }
+async function resolveAllowedStudentIds(
+  user: SessionUser,
+): Promise<string[] | null> {
+  if (user.role === "ADMIN") return null;
   if (user.role === "TERAPIS") {
-    return {
-      status: StudentStatus.ACTIVE,
-      therapistAssignments: {
-        some: { therapistId: user.id, endedAt: null },
-      },
-    };
+    const rows = await prisma.therapistAssignment.findMany({
+      where: { therapistId: user.id, endedAt: null },
+      select: { studentId: true },
+    });
+    return rows.map((r) => r.studentId);
+  }
+  if (user.role === "ORANG_TUA") {
+    const rows = await prisma.parentLink.findMany({
+      where: { parentId: user.id, isActive: true },
+      select: { studentId: true },
+    });
+    return rows.map((r) => r.studentId);
+  }
+  return [];
+}
+
+function buildStudentWhere(allowedStudentIds: string[] | null) {
+  if (allowedStudentIds === null) {
+    return { status: StudentStatus.ACTIVE };
   }
   return {
     status: StudentStatus.ACTIVE,
-    parentLinks: {
-      some: { parentId: user.id, isActive: true },
-    },
+    id: { in: allowedStudentIds },
   };
 }
 
-function sessionWhereForRole(user: SessionUser, since: Date) {
-  const base = { startedAt: { gte: since } };
-  if (user.role === "ADMIN") return base;
-  if (user.role === "TERAPIS") {
-    return {
-      ...base,
-      student: {
-        therapistAssignments: {
-          some: { therapistId: user.id, endedAt: null },
-        },
-      },
-    };
-  }
+function buildSessionWhere(
+  allowedStudentIds: string[] | null,
+  since?: Date,
+) {
+  const base = since ? { startedAt: { gte: since } } : {};
+  if (allowedStudentIds === null) return base;
   return {
     ...base,
-    student: {
-      parentLinks: {
-        some: { parentId: user.id, isActive: true },
-      },
-    },
+    studentId: { in: allowedStudentIds },
   };
 }
 
@@ -76,37 +76,48 @@ function tipForRole(role: SessionUser["role"]): string {
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   const user = await requireSession();
-  // connection() already awaited inside requireSession — Date is request-safe.
   const since = new Date();
   since.setDate(since.getDate() - 7);
 
-  const studentWhere = studentWhereForRole(user);
-  const sessionWhere = sessionWhereForRole(user, since);
+  const allowedStudentIds = await resolveAllowedStudentIds(user);
+  const hasNoAccessibleStudents =
+    allowedStudentIds !== null && allowedStudentIds.length === 0;
+
+  const studentWhere = hasNoAccessibleStudents
+    ? null
+    : buildStudentWhere(allowedStudentIds);
+  const sessionWhere = hasNoAccessibleStudents
+    ? null
+    : buildSessionWhere(allowedStudentIds, since);
+  const recentWhere = hasNoAccessibleStudents
+    ? null
+    : buildSessionWhere(allowedStudentIds);
 
   const [studentCount, publishedStoryCount, sessionsLast7Days, pendingInvites, recent] =
     await Promise.all([
-      prisma.student.count({ where: studentWhere }),
+      studentWhere ? prisma.student.count({ where: studentWhere }) : 0,
       prisma.story.count({ where: { status: StoryStatus.PUBLISHED } }),
-      prisma.learningSession.count({ where: sessionWhere }),
+      sessionWhere ? prisma.learningSession.count({ where: sessionWhere }) : 0,
       user.role === "ADMIN"
         ? prisma.inviteToken.count({
             where: { usedAt: null, expiresAt: { gt: new Date() } },
           })
         : Promise.resolve(null),
-      prisma.learningSession.findMany({
-        where: sessionWhereForRole(user, new Date(0)),
-        orderBy: { startedAt: "desc" },
-        take: 3,
-        select: {
-          id: true,
-          startedAt: true,
-          endedAt: true,
-          student: { select: { displayName: true } },
-          story: { select: { title: true } },
-        },
-      }),
+      recentWhere
+        ? prisma.learningSession.findMany({
+            where: recentWhere,
+            orderBy: { startedAt: "desc" },
+            take: 3,
+            select: {
+              id: true,
+              startedAt: true,
+              endedAt: true,
+              student: { select: { displayName: true } },
+              story: { select: { title: true } },
+            },
+          })
+        : [],
     ]);
-
   return {
     user,
     studentCount,

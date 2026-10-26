@@ -87,18 +87,34 @@ export async function listStudentsForViewer(
   const statusFilter = parsed.filters.status;
   const and: Prisma.StudentWhereInput[] = [];
 
+  let allowedStudentIds: string[] | null = null;
   if (user.role === "TERAPIS") {
-    and.push({
-      therapistAssignments: {
-        some: { therapistId: user.id, endedAt: null },
-      },
+    const rows = await prisma.therapistAssignment.findMany({
+      where: { therapistId: user.id, endedAt: null },
+      select: { studentId: true },
     });
+    allowedStudentIds = rows.map((r) => r.studentId);
   } else if (user.role === "ORANG_TUA") {
-    and.push({
-      parentLinks: {
-        some: { parentId: user.id, isActive: true },
-      },
+    const rows = await prisma.parentLink.findMany({
+      where: { parentId: user.id, isActive: true },
+      select: { studentId: true },
     });
+    allowedStudentIds = rows.map((r) => r.studentId);
+  }
+
+  if (allowedStudentIds !== null && allowedStudentIds.length === 0) {
+    return toListResult(
+      [],
+      paginationMeta({
+        page: parsed.page,
+        pageSize: parsed.pageSize,
+        total: 0,
+      }),
+    );
+  }
+
+  if (allowedStudentIds !== null) {
+    and.push({ id: { in: allowedStudentIds } });
   }
 
   if (statusFilter === "ACTIVE" || statusFilter === "ARCHIVED") {

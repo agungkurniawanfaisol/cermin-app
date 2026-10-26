@@ -1,7 +1,6 @@
 "use server";
 
 import { cache } from "react";
-import { createAvatarSignedUrl } from "@/lib/avatar-storage";
 import {
   batchGetCachedSignedUrls,
   batchSetCachedSignedUrls,
@@ -274,6 +273,11 @@ export async function listLearningSessionsForViewer(
     and.push({ studentId });
   } else if (allowedStudentIds !== null) {
     and.push({ studentId: { in: allowedStudentIds } });
+  }
+  if (parsed.filters.state === "OPEN") {
+    and.push({ endedAt: null });
+  } else if (parsed.filters.state === "ENDED") {
+    and.push({ endedAt: { not: null } });
   }
 
   if (parsed.q) {
