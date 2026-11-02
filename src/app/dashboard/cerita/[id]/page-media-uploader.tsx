@@ -177,10 +177,6 @@ function storyImageInputId(pageId: string) {
   return `file-story-image-${pageId}`;
 }
 
-function storyAudioInputId(pageId: string) {
-  return `file-story-audio-${pageId}`;
-}
-
 function storyExtraImageInputId(pageId: string) {
   return `file-story-extra-image-${pageId}`;
 }
@@ -260,8 +256,6 @@ export const PageMediaUploader = forwardRef<
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageFileName, setImageFileName] = useState("");
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [audioFileName, setAudioFileName] = useState("");
   const [extraAlt, setExtraAlt] = useState("");
   const [extraFile, setExtraFile] = useState<File | null>(null);
   const [extraPreviewUrl, setExtraPreviewUrl] = useState<string | null>(null);
@@ -276,7 +270,6 @@ export const PageMediaUploader = forwardRef<
   const imageAltRef = useRef(imageAlt);
   const extraAltRef = useRef(extraAlt);
   const imageFileRef = useRef(imageFile);
-  const audioFileRef = useRef(audioFile);
   const extraFileRef = useRef(extraFile);
   mediaRef.current = media;
   studentsRef.current = students;
@@ -284,7 +277,6 @@ export const PageMediaUploader = forwardRef<
   imageAltRef.current = imageAlt;
   extraAltRef.current = extraAlt;
   imageFileRef.current = imageFile;
-  audioFileRef.current = audioFile;
   extraFileRef.current = extraFile;
 
   useEffect(() => {
@@ -311,10 +303,6 @@ export const PageMediaUploader = forwardRef<
 
   const storyImages = useMemo(
     () => media.filter((m) => m.studentId == null && m.kind === "IMAGE"),
-    [media],
-  );
-  const storyAudios = useMemo(
-    () => media.filter((m) => m.studentId == null && m.kind === "AUDIO"),
     [media],
   );
 
@@ -426,16 +414,6 @@ export const PageMediaUploader = forwardRef<
               if (prev) URL.revokeObjectURL(prev);
               return null;
             });
-          },
-        },
-        {
-          file: audioFileRef.current,
-          kind: "AUDIO",
-          alt: "",
-          inputId: storyAudioInputId(pageId),
-          clear: () => {
-            setAudioFileName("");
-            setAudioFile(null);
           },
         },
       ];
@@ -558,10 +536,6 @@ export const PageMediaUploader = forwardRef<
     setExtraFileName(file?.name ?? "");
   }
 
-  function onAudioFileChange(file: File | null) {
-    setAudioFile(file);
-    setAudioFileName(file?.name ?? "");
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -871,7 +845,7 @@ export const PageMediaUploader = forwardRef<
         ) : null}
       </section>
 
-      {/* —— Audio & tambahan ilustrasi —— */}
+      {/* —— Tambahan ilustrasi —— */}
       <section
         className={cn(
           "flex flex-col gap-5",
@@ -885,79 +859,12 @@ export const PageMediaUploader = forwardRef<
             id={`story-extra-h-${pageId}`}
             className="text-sm font-semibold text-[var(--text,#1f2933)]"
           >
-            Audio &amp; tambahan ilustrasi
+            Tambahan ilustrasi
           </h3>
           <p className="mt-0.5 text-xs text-[var(--cermin-muted,#5c6b73)]">
-            Audio narasi tanpa autoplay, plus ilustrasi tambahan jika perlu.
+            Gambar tambahan (selain tab Ilustrasi) — suara cerita otomatis dibaca dari teks halaman oleh sistem.
           </p>
         </div>
-
-        <div className="flex flex-col gap-3">
-          <h4 className="text-xs font-semibold tracking-wide text-[var(--cermin-muted,#5c6b73)] uppercase">
-            Audio narasi
-          </h4>
-          {storyAudios.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-[var(--border,#d9e2ec)] bg-[var(--bg,#f7f4ef)] px-3 py-4 text-sm text-[var(--cermin-muted,#5c6b73)]">
-              Belum ada audio.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {storyAudios.map((item) => (
-                <li
-                  key={item.id}
-                  className="cermin-hover-card flex flex-col gap-2 rounded-xl border border-[var(--border,#d9e2ec)] bg-[var(--bg,#f7f4ef)] p-3 sm:p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Badge className="border-transparent bg-amber-50 text-amber-800">
-                      Audio
-                    </Badge>
-                    {!readOnly ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="min-h-11 border-red-200 text-[var(--danger,#9b2c2c)] hover:bg-red-50"
-                        disabled={pending || deletingId === item.id}
-                        onClick={() => handleDelete(item.id)}
-                      >
-                        {deletingId === item.id ? "Menghapus…" : "Hapus"}
-                      </Button>
-                    ) : null}
-                  </div>
-                  <MediaPreview item={item} />
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {!readOnly ? (
-            <div className="flex flex-col gap-3 rounded-xl border border-dashed border-[var(--border,#d9e2ec)] bg-[var(--bg,#f7f4ef)]/80 p-3 sm:p-4">
-              <p className="text-sm font-medium text-[var(--text,#1f2933)]">
-                Tambah audio
-              </p>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor={storyAudioInputId(pageId)}>File audio</Label>
-                <Input
-                  id={storyAudioInputId(pageId)}
-                  type="file"
-                  disabled={pending}
-                  accept="audio/mpeg,audio/wav,audio/ogg"
-                  onChange={(e) =>
-                    onAudioFileChange(e.target.files?.[0] ?? null)
-                  }
-                />
-                <p className="text-xs text-[var(--cermin-muted,#5c6b73)]">
-                  MPEG/WAV/OGG, maks. 10 MB — tidak autoplay di child mode
-                </p>
-                {audioFileName ? (
-                  <p className="text-xs text-[var(--cermin-accent,#3d7c6b)]">
-                    Siap diunggah: {audioFileName}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
         <div className="flex flex-col gap-3 border-t border-[var(--border,#d9e2ec)] pt-4">
           <h4 className="text-xs font-semibold tracking-wide text-[var(--cermin-muted,#5c6b73)] uppercase">
             Tambahan ilustrasi

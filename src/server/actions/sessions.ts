@@ -513,6 +513,7 @@ export type SessionPageMcq = {
 export type SessionReaderPage = {
   id: string;
   sortOrder: number;
+  title: string;
   bodyText: string;
   /** Foto murid personalisasi untuk murid sesi saat ini. */
   portraitImage: SessionMediaRef | null;
@@ -582,6 +583,7 @@ export async function getSessionForReader(
               select: {
                 id: true,
                 sortOrder: true,
+                title: true,
                 bodyText: true,
                 media: {
                   orderBy: { sortOrder: "asc" },
@@ -790,6 +792,7 @@ export async function getSessionForReader(
     return {
       id: page.id,
       sortOrder: page.sortOrder,
+      title: page.title,
       bodyText: page.bodyText,
       portraitImage: personalized[0] ? toRef(personalized[0]) : null,
       portraitsByStudentId,

@@ -141,14 +141,14 @@ async function CeritaDetailContent({
       id: "halaman",
       title: "Halaman, teks, media, dan soal",
       short: "Halaman",
-      tip: `Susun alur cerita halaman demi halaman. Teks singkat dan tenang. Unggah gambar/audio, lalu opsional tambah satu soal per halaman (jumlah pilihan bebas, teks/gambar). Saat ini: ${shell.pageCount} halaman · ${shell.pagesWithText} berteks · ${shell.pagesWithMedia} bermedia.`,
+      tip: `Susun alur cerita halaman demi halaman. Teks singkat dan tenang. Unggah gambar, suara narasi dibaca otomatis oleh sistem (Speech Synthesis), lalu opsional tambah satu soal per halaman. Saat ini: ${shell.pageCount} halaman · ${shell.pagesWithText} berteks · ${shell.pagesWithMedia} bermedia.`,
       done: halamanDone,
     },
     {
       id: "preview",
       title: "Pratinjau mode belajar",
       short: "Preview",
-      tip: "Pratinjau tampilan seperti /belajar: foto murid, teks besar, ilustrasi umum, dan audio — tanpa menyimpan sesi.",
+      tip: "Pratinjau tampilan seperti /belajar: foto murid, teks besar, ilustrasi umum, dan suara narasi otomatis — tanpa menyimpan sesi.",
       done: previewDone,
     },
     {
@@ -195,6 +195,7 @@ async function CeritaDetailContent({
   const previewPages = detail.pages.map((p) => ({
     id: p.id,
     sortOrder: p.sortOrder,
+    title: p.title,
     bodyText: p.bodyText,
     media: p.media.map((m) => ({
       id: m.id,

@@ -5,7 +5,6 @@ import {
   ChevronDown,
   CircleHelp,
   ImageIcon,
-  Mic,
   Type,
   UserRound,
 } from "lucide-react";
@@ -84,9 +83,9 @@ const PAGE_TABS: Array<{
   },
   {
     value: "tambahan",
-    label: "Audio & Tambahan",
-    short: "Audio",
-    icon: Mic,
+    label: "Tambahan",
+    short: "Tambahan",
+    icon: ImageIcon,
     mediaFocus: "extra",
   },
   {
@@ -475,8 +474,8 @@ export function PagesEditor({
             Halaman cerita
           </h2>
           <p className="mt-1 text-sm text-[var(--cermin-muted,#5c6b73)]">
-            Per halaman: teks, foto murid, ilustrasi, audio, dan opsional soal
-            (jumlah opsi bebas). Satu tombol Simpan mengunggah media yang sudah dipilih.
+            Per halaman: teks, foto murid, ilustrasi, dan opsional soal (suara dibaca otomatis dari teks).
+            Satu tombol Simpan mengunggah media yang sudah dipilih.
           </p>
         </div>
         {!readOnly ? (

@@ -14,6 +14,7 @@ export type PreviewPageMedia = {
 export type PreviewPage = {
   id: string;
   sortOrder: number;
+  title?: string;
   bodyText: string;
   media: PreviewPageMedia[];
 };
@@ -205,9 +206,13 @@ export function StoryPreviewPanel({ title, pages, students }: Props) {
                 </div>
               ) : null}
 
-              {media.storyAudios.length > 0 ? (
+              {page.title || page.bodyText || media.storyAudios.length > 0 ? (
                 <div className="flex justify-center pt-2">
-                  <PageAudioDock audios={media.storyAudios} />
+                  <PageAudioDock
+                    title={page.title}
+                    bodyText={page.bodyText}
+                    audios={media.storyAudios}
+                  />
                 </div>
               ) : null}
             </div>

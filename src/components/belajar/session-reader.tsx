@@ -353,8 +353,12 @@ export function SessionReader({ session }: { session: SessionForReader }) {
             </button>
 
             <div className="flex items-center gap-2">
-              {showAudio && currentPage?.storyAudios.length ? (
-                <PageAudioDock audios={currentPage.storyAudios} />
+              {showAudio && (currentPage?.title || currentPage?.bodyText) ? (
+                <PageAudioDock
+                  title={currentPage.title}
+                  bodyText={currentPage.bodyText}
+                  audios={currentPage.storyAudios}
+                />
               ) : null}
               {currentPage?.mcq ? (
                 <button
